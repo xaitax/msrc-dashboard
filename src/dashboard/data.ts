@@ -1,8 +1,9 @@
 // View model for the dashboard: pure derivation from the store's contents.
 import { awardSummary, type AwardSummary } from "../core/awards";
+import { caseClock, type CaseClock } from "../core/caseClock";
 import { extractCves, msrcNamedCves } from "../core/cve";
 import { resolvePublicCves, type CveLinks, type PublicCve, type PublicMeta } from "../core/publicCves";
-import { caseStatus, caseStatusReason, caseTitle, isClosed, isUnseen, PIPELINE } from "../core/derive";
+import { caseStatus, caseStatusReason, caseTitle, isClosed, isUnseen, MSRC_SENDER, PIPELINE } from "../core/derive";
 import { needsAction } from "../core/statusGuide";
 import type { StatusHistory } from "../core/history";
 import { send, type AppState } from "../shared/protocol";
@@ -42,6 +43,8 @@ export interface CaseRow {
   points: number;
   /** Public CVEs tied to this case (by MSRC naming it, or by the researcher). */
   publicCves: { item: PublicCve; by: "you" | "msrc" }[];
+  /** The case's day against the 90-day mark, and MSRC's silence on it. */
+  clock: CaseClock;
   record: CaseRecord;
 }
 
@@ -132,9 +135,12 @@ export function buildView(
   history: StatusHistory = {},
   drafts: DraftRef[] = [],
   pub: { publicCves?: PublicCve[]; cveLinks?: CveLinks } = {},
+  now: Date = new Date(),
 ): ViewModel {
   const eventsByCase = new Map<VulnId, ChangeEvent[]>();
   for (const e of [...events].sort(newestFirst)) eventsByCase.set(e.reportNumber, [...(eventsByCase.get(e.reportNumber) ?? []), e]);
+  const msgsByCase = new Map<VulnId, ThreadMessage[]>();
+  for (const m of msgs) msgsByCase.set(m.reportNumber, [...(msgsByCase.get(m.reportNumber) ?? []), m]);
   const cves = extractCves(msgs);
   const publicCves = resolvePublicCves(cases, pub.publicCves ?? [], pub.cveLinks ?? {}, msrcNamedCves(cves));
 
@@ -146,6 +152,20 @@ export function buildView(
     const statusChange = unseen.find((e) => e.type === "status");
     const prevStatus = statusChange && typeof statusChange.oldValue === "string" ? statusChange.oldValue : undefined;
     const lastChange = evs[0] ?? null;
+    const closed = isClosed(status) || status === "CLOSED";
+    const caseMsgs = msgsByCase.get(c.reportNumber) ?? [];
+    const casePublic = publicCves.byCase[c.reportNumber] ?? [];
+    const clock = caseClock(
+      {
+        submittedAt: c.list.createdOn,
+        open: !closed,
+        fixedPublicly: casePublic.length > 0,
+        actionNeeded: needsAction(statusReason),
+        msrcTimes: [...caseMsgs.filter((m) => m.senderName === MSRC_SENDER).map((m) => m.createdOn), ...(history[c.reportNumber] ?? []).map((p) => p.at)],
+        ownTimes: caseMsgs.filter((m) => m.senderName !== MSRC_SENDER).map((m) => m.createdOn),
+      },
+      now,
+    );
     return {
       reportNumber: c.reportNumber,
       ticketNumber: c.list.ticketNumber,
@@ -159,7 +179,8 @@ export function buildView(
       lastChange,
       lastChangeAt: lastChange?.occurredAt ?? c.list.lastActivityOn,
       cves: Array.from(new Set([...(cves[c.reportNumber] ?? []).map((r) => r.cve), ...(publicCves.byCase[c.reportNumber] ?? []).map((x) => x.item.cve)])),
-      publicCves: publicCves.byCase[c.reportNumber] ?? [],
+      publicCves: casePublic,
+      clock,
       unseen: unseen.length > 0,
       closed: isClosed(status),
       points: pointsOf(c),

@@ -25,6 +25,12 @@ export function shortWhen(iso: string | null | undefined, now = new Date()): str
   return d.toLocaleDateString(undefined, { day: "numeric", month: "short", year: d.getFullYear() === now.getFullYear() ? undefined : "numeric" });
 }
 
+/** "Thu 19 Nov" (+ year if not this year), for a day whose time doesn't matter. */
+export function dayDate(iso: string, now = new Date()): string {
+  const d = new Date(iso);
+  return d.toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short", year: d.getFullYear() === now.getFullYear() ? undefined : "numeric" });
+}
+
 export function ago(ms: number | null, now = Date.now()): string {
   if (!ms) return "never";
   const s = Math.max(0, Math.round((now - ms) / 1000));

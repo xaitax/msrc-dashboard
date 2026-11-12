@@ -113,9 +113,10 @@ a { color: var(--accent); }
 .nav__item[aria-current="page"]::after { content: ""; position: absolute; left: 0.7rem; right: 0.7rem; bottom: -1px; height: 2px; border-radius: 2px; background: var(--accent); }
 .nav__badge { min-width: 1.2rem; padding: 0 0.35rem; border-radius: 999px; background: var(--accent); color: #fff; font-size: 0.6875rem; font-weight: 600; line-height: 1.2rem; text-align: center; }
 .top__sync { color: var(--ink-3); font-size: 0.8125rem; white-space: nowrap; }
-.search { position: relative; display: flex; align-items: center; }
+/* The search box gives way first when the top bar runs out of room, so the bar never overflows. */
+.search { position: relative; display: flex; align-items: center; flex: 0 1 auto; min-width: 9rem; }
 .search svg { position: absolute; left: 0.7rem; width: 0.95rem; height: 0.95rem; color: var(--ink-3); pointer-events: none; }
-.search input { width: 16rem; border: 1px solid var(--rule-strong); border-radius: 8px; background: var(--paper); padding: 0.42rem 2rem 0.42rem 2.1rem; font-size: 0.875rem; transition: border-color 0.15s, box-shadow 0.15s, width 0.2s; }
+.search input { width: 16rem; max-width: 100%; min-width: 0; border: 1px solid var(--rule-strong); border-radius: 8px; background: var(--paper); padding: 0.42rem 2rem 0.42rem 2.1rem; font-size: 0.875rem; transition: border-color 0.15s, box-shadow 0.15s, width 0.2s; }
 .search input:focus { outline: none; width: 20rem; background: var(--white); border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent); }
 .search input::placeholder { color: #9a9ca2; }
 .search kbd { position: absolute; right: 0.55rem; font: 500 0.7rem/1 var(--font); color: var(--ink-3); border: 1px solid var(--rule-strong); border-radius: 4px; padding: 0.15rem 0.35rem; }
@@ -169,7 +170,8 @@ a { color: var(--accent); }
 .since--latest .chg__what { color: var(--ink-2); }
 
 .search-note { margin: 0.9rem 0 0; color: var(--ink-2); font-size: 0.875rem; }
-.board { display: grid; gap: 1rem; margin-top: 1.25rem; align-items: start; }
+/* As many stage columns as fit; the rest flow onto the next row instead of widening the page. */
+.board { display: grid; grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr)); gap: 1rem; margin-top: 1.25rem; align-items: start; }
 .col { background: color-mix(in srgb, var(--c) 6%, var(--paper)); border: 1px solid color-mix(in srgb, var(--c) 18%, var(--rule)); border-top: 3px solid var(--c); border-radius: 12px; padding: 0.55rem 0.6rem 0.65rem; }
 .col__head { display: flex; align-items: center; gap: 0.5rem; margin: 0.15rem 0.2rem 0.6rem; font-size: 0.9375rem; font-weight: 600; letter-spacing: -0.01em; }
 .col__head .swatch { background: var(--c); }
@@ -327,7 +329,14 @@ a { color: var(--accent); }
 .dialog__done { color: var(--s-complete); font-weight: 600; margin: 0 0 1rem; }
 .dialog__actions { display: flex; justify-content: flex-end; gap: 0.5rem; }
 
-/* The top bar needs about 1600px at full size: shed the least needed parts first. */
+/* ---------- header chips: recognition points and bounty total ---------- */
+.pts { display: inline-flex; align-items: center; gap: 0.35rem; border: 1px solid color-mix(in srgb, var(--s-review) 35%, var(--rule)); background: color-mix(in srgb, var(--s-review) 9%, var(--white)); color: #8a5408; border-radius: 999px; padding: 0.3rem 0.7rem; font-size: 0.8125rem; cursor: pointer; white-space: nowrap; }
+.pts svg { width: 0.95rem; height: 0.95rem; }
+.pts b { font-weight: 700; }
+.pts:hover { border-color: var(--s-review); }
+
+/* The top bar needs about 1600px at full size: shed the least needed parts first.
+   These rules must come after the base rules they override. */
 @media (max-width: 1680px) {
   .search input { width: 12rem; }
   .search input:focus { width: 15rem; }
@@ -338,15 +347,18 @@ a { color: var(--accent); }
 @media (max-width: 1360px) {
   .pts--usd { display: none; }
 }
-@media (max-width: 1100px) {
+@media (max-width: 1279px) {
   .search input, .search input:focus { width: 10rem; }
   .pts { display: none; }
+}
+@media (max-width: 1119px) {
+  .top { flex-wrap: wrap; height: auto; padding-block: 0.5rem; }
+}
+@media (max-width: 1100px) {
   .rec-grid { grid-template-columns: 1fr; }
   .fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 860px) {
-  .top { flex-wrap: wrap; height: auto; padding-block: 0.5rem; }
-  .board { grid-template-columns: 1fr !important; }
   .act__row { grid-template-columns: 3.5rem 0.5rem 4rem minmax(0, 1fr); }
   .act__title { display: none; }
 }
@@ -371,10 +383,6 @@ a { color: var(--accent); }
 .md a { color: var(--accent); text-decoration: underline; text-decoration-color: color-mix(in srgb, var(--accent) 45%, transparent); text-underline-offset: 2px; }
 
 /* ---------- recognition points ---------- */
-.pts { display: inline-flex; align-items: center; gap: 0.35rem; border: 1px solid color-mix(in srgb, var(--s-review) 35%, var(--rule)); background: color-mix(in srgb, var(--s-review) 9%, var(--white)); color: #8a5408; border-radius: 999px; padding: 0.3rem 0.7rem; font-size: 0.8125rem; cursor: pointer; white-space: nowrap; }
-.pts svg { width: 0.95rem; height: 0.95rem; }
-.pts b { font-weight: 700; }
-.pts:hover { border-color: var(--s-review); }
 .rec-points { margin-bottom: 1.5rem; }
 .pts-list { list-style: none; margin: 0.75rem 0 0; padding: 0; columns: 2 22rem; column-gap: 1.5rem; }
 .pts-list li { display: grid; grid-template-columns: 4.5rem minmax(0, 1fr) auto; gap: 0.6rem; padding: 0.35rem 0; border-bottom: 1px solid var(--rule); font-size: 0.875rem; break-inside: avoid; }
@@ -637,3 +645,21 @@ a.brand:hover .brand__name { color: var(--accent-deep); }
 .int__env dt { color: var(--ink-3); }
 .int__env dd { margin: 0; }
 .int__table--flags code { overflow-wrap: normal; }
+
+/* Time with MSRC: the 90-day mark and MSRC's silence (card tags, case page bar). */
+.card__clock { display: flex; flex-wrap: wrap; gap: 0.3rem; min-width: 0; }
+.tag { --c: var(--ink-2); font-size: 0.7rem; font-weight: 600; line-height: 1.5; color: color-mix(in srgb, var(--c) 82%, var(--ink)); background: color-mix(in srgb, var(--c) 10%, var(--white)); border-radius: 999px; padding: 0.05rem 0.45rem; white-space: nowrap; }
+.tag--soon { --c: var(--s-review); }
+.tag--past { --c: var(--danger); }
+.tag--quiet { background: var(--band); color: var(--ink-2); font-weight: 500; }
+
+.ctime { --c: var(--ink-3); margin: 0.4rem 1.75rem 1.25rem; display: grid; gap: 0.5rem; font-size: 0.875rem; color: var(--ink-2); }
+.ctime p { margin: 0; }
+.ctime__head { color: var(--ink); }
+.ctime__head b { font-weight: 600; }
+.ctime--soon { --c: var(--s-review); }
+.ctime--past { --c: var(--danger); }
+.ctime--soon .ctime__head b, .ctime--past .ctime__head b { color: color-mix(in srgb, var(--c) 82%, var(--ink)); }
+.ctime__bar { position: relative; height: 0.375rem; max-width: 36rem; border-radius: 999px; background: var(--band); box-shadow: inset 0 0 0 1px var(--rule); }
+.ctime__fill { position: absolute; inset: 0 auto 0 0; border-radius: inherit; background: var(--c); }
+.ctime__mark { position: absolute; top: -0.25rem; bottom: -0.25rem; width: 2px; margin-left: -1px; border-radius: 1px; background: var(--ink); }

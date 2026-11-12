@@ -5,6 +5,7 @@ import type { CaseRow, ViewModel } from "../data";
 import { caseLabel, when } from "../format";
 import { buildTimeline } from "../../core/timeline";
 import { CaseGuide } from "./CaseGuide";
+import { CaseTime } from "./CaseTime";
 import { Disclosures } from "./Disclosures";
 import { Markdown } from "./Markdown";
 import { MessageBox } from "./MessageBox";
@@ -89,6 +90,7 @@ export function CasePanel({ row, view }: { row: CaseRow; view: ViewModel }) {
         <StageRail stage={row.stage} prev={row.prevStage} labelled />
       </div>
 
+      <CaseTime clock={row.clock} />
       <CaseGuide api={api} row={row} onReply={writeToMsrc} />
 
       <dl class="fields">

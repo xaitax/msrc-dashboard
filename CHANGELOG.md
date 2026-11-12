@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.2.2 (2026-11-12)
+
+### Added
+
+- **Time with MSRC.** Each open case counts its days against the 90-day mark common in
+  coordinated disclosure (MSRC itself sets no fixed deadline). Board cards are tagged from 14 days
+  before the mark ("Day 83 of 90") and after it ("Day 141, past 90"). They are also tagged when
+  MSRC has been silent for 30 days ("MSRC silent since submission", "MSRC silent for 45 days"), or
+  hasn't answered your message for 14 days ("No reply for 15 days"). The case page shows the day
+  count with a bar to the mark, and when MSRC last wrote or changed the status. The clock stops
+  once the case is complete or its CVE is public.
+- **Screenshots** in the README: real cases, with identifying details scrambled and blurred.
+
+### Fixed
+
+- The header fit only from about 1360 px wide: the rules that hide the points and bounty chips on
+  narrower windows never applied. It now fits at any desktop width; the search box gives way
+  first, and below about 1120 px the header wraps onto two rows.
+- The board's stage columns wrap onto a second row instead of widening the page.
+
 ## 0.2.1 (2026-11-12)
 
 ### Added

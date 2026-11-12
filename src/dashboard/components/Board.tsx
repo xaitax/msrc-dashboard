@@ -4,6 +4,7 @@ import { boardColumns, type Strip } from "../board";
 import type { DraftRef } from "../../shared/types";
 import type { CaseRow } from "../data";
 import { caseLabel, shortWhen, when } from "../format";
+import { CardClock } from "./CaseTime";
 import { TYPE_CLASS } from "./eventStyle";
 import { StatusPill } from "./StageRail";
 
@@ -29,6 +30,7 @@ export function CaseCard({ row, onOpen, showStatus }: { row: CaseRow; onOpen: (r
         </span>
       </span>
       <span class="card__title">{row.title || row.reportNumber}</span>
+      <CardClock clock={row.clock} />
       <span class="card__foot">
         {row.lastChange && <span class={`dot dot--${TYPE_CLASS[row.lastChange.type]}`} aria-hidden="true" />}
         <span class="card__last" title={row.lastChange?.summary ?? ""}>
@@ -118,7 +120,7 @@ export function Board({ rows, onOpen, searching }: { rows: CaseRow[]; onOpen: (r
   const closedOpen = showClosed || searching;
   return (
     <div class="boardwrap">
-      <div class="board" style={{ gridTemplateColumns: `repeat(${columns.length}, minmax(17rem, 1fr))` }}>
+      <div class="board">
         {columns.map((c) => (
           <section key={c.key} class={`col col--${c.key}`} aria-label={`${c.label}: ${c.rows.length}`}>
             <h2 class="col__head">

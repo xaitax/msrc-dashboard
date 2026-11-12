@@ -8,14 +8,20 @@ lets you write reports and messages without the portal.
 This is an unofficial tool. It is not affiliated with or endorsed by Microsoft. It talks to the same
 API the portal uses, so a portal update can break parts of it at any time.
 
+![The board: cases in columns by MSRC stage, what changed since your last visit, and tags for cases that need attention](screenshots/board.webp)
+
+<sub>The screenshots show real cases. Titles, case numbers, CVEs, amounts, names and message text are scrambled and blurred.</sub>
+
 ## What it does
 
 - **Board.** Your cases in columns by MSRC stage (New, Review / Repro, Develop, Pre-release,
   Complete), with what changed since your last visit on top. A case MSRC has put on hold until you
-  reply is marked **Action required**. Search with `/`, step through cases with `j` and `k`.
+  reply is marked **Action required**. Cases near or past the 90-day disclosure mark, and cases MSRC
+  has gone quiet on, are tagged. Search with `/`, step through cases with `j` and `k`.
 - **Case page.** Every field the portal has, plus one timeline of messages, status changes (with
-  the exact time from MSRC's notification feed) and file uploads. On top, MSRC's banner for the case
-  and the portal's explanation of what the status means and what, if anything, you should do.
+  the exact time from MSRC's notification feed) and file uploads. On top: the case's day against the
+  90-day mark and when MSRC last wrote, MSRC's banner for the case, and the portal's explanation of
+  what the status means and what, if anything, you should do.
   Messages and report text render as Markdown.
 - **Notifications.** A desktop notification when MSRC replies, a status or bounty changes, or a CVE
   appears. It checks every 2 minutes (two requests when nothing changed) and re-reads everything
@@ -37,6 +43,42 @@ API the portal uses, so a portal update can break parts of it at any time.
 - **Export.** One JSON file with everything about your cases, including a field guide for an LLM.
 - **Staying signed in.** The portal's session is kept alive and renewed in a background tab, so
   there's no daily sign-in.
+
+## A look around
+
+### A case
+
+![A case page: pipeline stage, day 120 against the 90-day mark, MSRC's note on the case, the case fields and a planned disclosure](screenshots/case.webp)
+
+Everything about a case on one page: where it is in MSRC's pipeline, its day against the 90-day
+disclosure mark, MSRC's explanation of the status, every field the portal has, and your planned
+disclosures. When MSRC puts a case on hold until you reply, a red **Action required** box
+appears here, and **Reply to MSRC** takes you straight to the message box.
+
+### Messages
+
+![The end of a case timeline: a status change and two MSRC messages, with the message box below](screenshots/timeline.webp)
+
+Messages, status changes and uploads in one timeline, with what's new since your last visit
+marked. You write back from the same page, in Markdown.
+
+<img src="screenshots/message.webp" alt="The confirmation before sending: the case, the topic and the message as MSRC will get it" width="560">
+
+Nothing goes to MSRC until you've seen the message in a preview and confirmed it.
+
+### Reports
+
+![The report form: title, impact and description filled in, and the Ready to submit checklist at 4 of 6](screenshots/report.webp)
+
+MSRC's report form on one page, with a checklist of what MSRC requires before you submit. Drafts
+are saved on MSRC, and your text is also kept locally as you type.
+
+### Recognition and bounties
+
+![The Recognition page: bounties added up across cases, points per case and quarter, and MSRC's leaderboards](screenshots/recognition.webp)
+
+Your bounties added up across all cases, recognition points per case and quarter, and where you
+stand on MSRC's leaderboards.
 
 ## Install
 

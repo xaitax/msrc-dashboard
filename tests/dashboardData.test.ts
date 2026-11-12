@@ -58,6 +58,24 @@ describe("buildView", () => {
     expect(w.rows.find((r) => r.reportNumber === "VULN-4")!.statusReason).toBe("ADDITIONAL_INFORMATION_NEEDED");
   });
 
+  it("times each case against the 90-day mark and MSRC's silence", () => {
+    const quiet = caseRec("VULN-6", { status: "REVIEW_REPRO" }, { list: { status: "REVIEW_REPRO", createdOn: iso("2026-08-20T10:00:00") } });
+    const busy = caseRec("VULN-7", { status: "DEVELOP" }, { list: { status: "DEVELOP", createdOn: iso("2026-08-20T10:00:00") } });
+    const msgs = [
+      msg({ reportNumber: "VULN-6", createdOn: iso("2026-08-20T10:10:00"), senderName: "MSRC" }), // the receipt
+      msg({ reportNumber: "VULN-6", createdOn: iso("2026-10-01T09:00:00"), senderName: "Researcher" }),
+      msg({ reportNumber: "VULN-7", createdOn: iso("2026-08-20T10:10:00"), senderName: "MSRC" }),
+    ];
+    const history = { "VULN-7": [{ status: "DEVELOP", at: iso("2026-11-02T09:00:00") }] };
+    const w = buildView([quiet, busy], msgs, [], STATE, history, [], {}, NOW);
+    const q = w.rows.find((r) => r.reportNumber === "VULN-6")!.clock;
+    expect(q.deadline).toMatchObject({ day: 83, state: "soon" });
+    expect(q.quiet).toMatchObject({ kind: "since-submission", unansweredSince: iso("2026-10-01T09:00:00") });
+    const b = w.rows.find((r) => r.reportNumber === "VULN-7")!.clock;
+    expect(b.lastMsrcAt).toBe(iso("2026-11-02T09:00:00")); // a status change counts as MSRC activity
+    expect(b.quiet).toBeNull();
+  });
+
   it("groups the last 30 days of events by local day, newest first", () => {
     const feed = groupFeed(events, NOW, 30);
     expect(feed.map((g) => g.label)).toEqual(["Today", "Yesterday"]);

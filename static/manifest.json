@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "MSRC Dashboard",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Your MSRC Researcher Portal submissions in one place: changes and notifications, reports and messages, export.",
   "minimum_chrome_version": "120",
   "action": {
