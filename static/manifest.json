@@ -1,0 +1,48 @@
+{
+  "manifest_version": 3,
+  "name": "MSRC Dashboard",
+  "version": "0.2.0",
+  "description": "Your MSRC Researcher Portal submissions in one place: changes and notifications, reports and messages, export.",
+  "minimum_chrome_version": "120",
+  "action": {
+    "default_title": "MSRC Dashboard",
+    "default_icon": {
+      "16": "icon-16.png",
+      "32": "icon-32.png"
+    }
+  },
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://msrc.microsoft.com/report/*"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "run_at": "document_start",
+      "all_frames": false
+    }
+  ],
+  "permissions": [
+    "storage",
+    "alarms",
+    "declarativeNetRequest",
+    "notifications",
+    "tabs"
+  ],
+  "host_permissions": [
+    "https://msrc.microsoft.com/*",
+    "https://api.msrc.microsoft.com/*",
+    "https://msrcweb.b2clogin.com/*"
+  ],
+  "icons": {
+    "16": "icon-16.png",
+    "32": "icon-32.png",
+    "48": "icon-48.png",
+    "128": "icon-128.png"
+  }
+}
