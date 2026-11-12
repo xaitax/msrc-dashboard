@@ -5,6 +5,7 @@ import type { CaseRecord, ChangeEvent, EventType, ThreadMessage, VulnId } from "
 import type { CveRef } from "./cve";
 import { caseTitle, humanizeEnum, isAutomatic, MSRC_SENDER } from "./derive";
 import { summarizeMsrcMessage } from "./msrcText";
+import { needsAction } from "./statusGuide";
 
 /** Fields whose churn never means anything to the researcher. */
 export const IGNORED_FIELDS: ReadonlySet<string> = new Set([
@@ -138,7 +139,11 @@ export function diffCase(
       field: "statusReason",
       oldValue: a["statusReason"] ?? null,
       newValue: b["statusReason"] ?? null,
-      summary: `Status reason ${humanizeEnum(a["statusReason"] as string) || "—"} → ${humanizeEnum(b["statusReason"] as string) || "—"}`,
+      summary: needsAction(b["statusReason"] as string)
+        ? "Action required: MSRC needs more information from you"
+        : needsAction(a["statusReason"] as string)
+          ? "MSRC no longer needs information from you"
+          : `Status reason ${humanizeEnum(a["statusReason"] as string) || "—"} → ${humanizeEnum(b["statusReason"] as string) || "—"}`,
       occurredAt: changeLogTime(detail, "statusReason", b["statusReason"]),
       gen,
     });

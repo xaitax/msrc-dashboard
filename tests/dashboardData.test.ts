@@ -50,6 +50,14 @@ describe("buildView", () => {
     expect(v.rows.find((r) => r.reportNumber === "VULN-3")!).toMatchObject({ closed: true, cves: ["CVE-2026-55555"] });
   });
 
+  it("flags the cases where MSRC waits for the researcher", () => {
+    const waiting = caseRec("VULN-4", { status: "REVIEW_REPRO", statusReason: "ADDITIONAL_INFORMATION_NEEDED" }, { list: { status: "REVIEW_REPRO", statusReason: "ADDITIONAL_INFORMATION_NEEDED" } });
+    const listOnly = caseRec("VULN-5", null, { list: { status: "NEW", statusReason: "ADDITIONAL_INFORMATION_NEEDED" } });
+    const w = buildView([...cases, waiting, listOnly], messages, events, STATE);
+    expect(w.rows.filter((r) => r.actionNeeded).map((r) => r.reportNumber).sort()).toEqual(["VULN-4", "VULN-5"]);
+    expect(w.rows.find((r) => r.reportNumber === "VULN-4")!.statusReason).toBe("ADDITIONAL_INFORMATION_NEEDED");
+  });
+
   it("groups the last 30 days of events by local day, newest first", () => {
     const feed = groupFeed(events, NOW, 30);
     expect(feed.map((g) => g.label)).toEqual(["Today", "Yesterday"]);

@@ -42,6 +42,13 @@ describe("diffCase", () => {
     expect(ev[0]).toMatchObject({ type: "status_reason", occurredAt: NOW, detectedAt: NOW });
   });
 
+  it("says plainly when MSRC starts or stops waiting for the researcher", () => {
+    const waiting = { ...base, statusReason: "ADDITIONAL_INFORMATION_NEEDED" };
+    expect(diffCase(caseRec("VULN-1", base), caseRec("VULN-1", waiting), ctx)[0]!.summary).toBe("Action required: MSRC needs more information from you");
+    expect(diffCase(caseRec("VULN-1", waiting), caseRec("VULN-1", { ...base, statusReason: "NONE" }), ctx)[0]!.summary).toBe("MSRC no longer needs information from you");
+    expect(diffCase(caseRec("VULN-1", base), caseRec("VULN-1", { ...base, statusReason: "FIXED" }), ctx)[0]!.summary).toBe("Status reason — → Fixed");
+  });
+
   it("folds all bounty sub-field changes into one bounty event", () => {
     const next = { ...base, bounty: { amount: 5000, program: "Windows Insider", status: "AWARDED" } };
     const ev = diffCase(caseRec("VULN-1", base), caseRec("VULN-1", next), ctx);

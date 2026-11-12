@@ -4,6 +4,8 @@ import { humanizeEnum, MSRC_SENDER } from "../../core/derive";
 import type { CaseRow, ViewModel } from "../data";
 import { caseLabel, when } from "../format";
 import { buildTimeline } from "../../core/timeline";
+import { CaseGuide } from "./CaseGuide";
+import { Disclosures } from "./Disclosures";
 import { Markdown } from "./Markdown";
 import { MessageBox } from "./MessageBox";
 import { PublicCveFacts } from "./PublicCves";
@@ -87,6 +89,8 @@ export function CasePanel({ row, view }: { row: CaseRow; view: ViewModel }) {
         <StageRail stage={row.stage} prev={row.prevStage} labelled />
       </div>
 
+      <CaseGuide api={api} row={row} onReply={writeToMsrc} />
+
       <dl class="fields">
         <Field label="Severity / impact">
           {[d["severity"], d["securityImpact"]].filter(Boolean).map((x) => humanizeEnum(String(x))).join(", ") || "—"}
@@ -104,9 +108,13 @@ export function CasePanel({ row, view }: { row: CaseRow; view: ViewModel }) {
         <Field label="CVSS">{d["cvssVectorString"] ? val(d["cvssVectorString"]) : row.publicCves[0]?.item.baseScore ? `${row.publicCves[0].item.baseScore} (public advisory)` : "—"}</Field>
         <Field label="CWE">{val(d["cweList"])}</Field>
         <Field label="Products">{products.join(", ") || val(d["target"])}</Field>
-        <Field label="Disclosure">{disclosures.length ? disclosures.map((x) => `${x["name"] ?? "event"}${x["date"] ? ` (${String(x["date"]).slice(0, 10)})` : ""}`).join("; ") : "—"}</Field>
         <Field label="Unread in portal">{val(d["unreadMessageCount"] ?? row.record.list.unreadMessageCount)}</Field>
       </dl>
+
+      <section class="plan-wrap" aria-labelledby="plan-h">
+        <h3 id="plan-h">Planned disclosure</h3>
+        <Disclosures api={api} reportNumber={row.reportNumber} events={disclosures} onChanged={syncSoon} />
+      </section>
 
       <div class="tabs" role="tablist">
         {(

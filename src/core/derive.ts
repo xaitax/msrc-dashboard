@@ -51,6 +51,7 @@ export const caseTitle = (c: CaseRecord): string => decodeEntities(String(c.deta
 
 /** The current status: the full report's if fetched, else the list row's. */
 export const caseStatus = (c: CaseRecord): string | null => (c.detail?.["status"] as string | null | undefined) ?? c.list.status;
+export const caseStatusReason = (c: CaseRecord): string | null => (c.detail?.["statusReason"] as string | null | undefined) ?? c.list.statusReason;
 
 /** The name researchers use for a case: its MSRC ticket number, else the VULN id. */
 export const caseLabel = (c: { ticketNumber: string | null; reportNumber: string }): string => c.ticketNumber || c.reportNumber;

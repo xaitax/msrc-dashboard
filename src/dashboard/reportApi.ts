@@ -1,10 +1,21 @@
-// Writes from the dashboard page: report drafts, attachments, submit, messages.
+// Writes from the dashboard page: report drafts, attachments, submit, messages,
+// planned disclosures. Also the per-case MSRC banner (a read, made live).
 // The page calls the API itself (attachments can be far larger than runtime
 // messages allow); the service worker only hands out the access token
 // (`auth:token`). Every call here is triggered by an explicit click.
-import { CREATE_REPORT_MUTATION, DELETE_REPORT_DRAFT_MUTATION, REPORT_BY_ID_QUERY, SUBMIT_REPORT_MUTATION, UPDATE_REPORT_DRAFT_MUTATION } from "../background/queries";
+import {
+  CANCEL_DISCLOSURE_MUTATION,
+  CREATE_DISCLOSURE_MUTATION,
+  CREATE_REPORT_MUTATION,
+  DELETE_REPORT_DRAFT_MUTATION,
+  PORTAL_BANNERS_QUERY,
+  REPORT_BY_ID_QUERY,
+  SUBMIT_REPORT_MUTATION,
+  UPDATE_DISCLOSURE_MUTATION,
+  UPDATE_REPORT_DRAFT_MUTATION,
+} from "../background/queries";
 import { attachFieldName, encryptForMsrc, type MsrcJwk } from "../core/attachCrypto";
-import type { ReportInput } from "../core/reportForm";
+import { MEDIA, type ReportInput } from "../core/reportForm";
 import { isGuid, isVulnId } from "../shared/ids";
 import { API_ROOT, GRAPHQL_URL } from "../shared/urls";
 import { errorText } from "../shared/protocol";
@@ -26,6 +37,21 @@ export interface ReportApiDeps {
   fetch: typeof fetch;
   /** Access token; `fresh` asks the service worker to mint a new one. */
   token: (fresh?: boolean) => Promise<string>;
+}
+
+export interface CaseBanner {
+  id: string;
+  key: string;
+  /** HTML from MSRC: render through bannerMarkdown, never as markup. */
+  body: string;
+  tone: string;
+}
+
+/** What the portal's "planned disclosure" form sends. `date` is YYYY-MM-DD or "". */
+export interface DisclosureInput {
+  medium: string;
+  name: string;
+  date: string;
 }
 
 export interface DraftFile {
@@ -63,6 +89,19 @@ const vuln = (rn: string) => {
   if (!isVulnId(rn)) throw new WriteError(`Invalid report number: ${JSON.stringify(rn)}`);
   return rn;
 };
+
+const eventId = (id: string) => {
+  if (!/^[A-Za-z0-9-]{1,64}$/.test(id)) throw new WriteError(`Invalid disclosure id: ${JSON.stringify(id)}`);
+  return id;
+};
+
+function tracking(d: DisclosureInput) {
+  const name = d.name.trim();
+  if (!name) throw new WriteError("A planned disclosure needs a name.");
+  if (!MEDIA.some((m) => m.value === d.medium)) throw new WriteError(`Unknown medium: ${JSON.stringify(d.medium)}`);
+  if (d.date && !/^\d{4}-\d{2}-\d{2}$/.test(d.date)) throw new WriteError(`Invalid date: ${JSON.stringify(d.date)}`);
+  return { medium: d.medium, name, date: d.date ? `${d.date}T00:00:00Z` : null };
+}
 
 const fileOf = (f: Record<string, unknown>): DraftFile => ({
   id: String(f["id"] ?? ""),
@@ -136,6 +175,25 @@ export function createReportApi(d: ReportApiDeps) {
         // Network failure or timeout after the request went out.
         throw new MaybeSentError(`send message: ${errorText(e)}`);
       }
+    },
+
+    async portalBanners(reportNumber: string): Promise<CaseBanner[]> {
+      const d = await gql<{ portalBanners: CaseBanner[] | null }>(PORTAL_BANNERS_QUERY, { reportNumber: vuln(reportNumber) }, "case banner");
+      return d.portalBanners ?? [];
+    },
+
+    async addDisclosure(reportNumber: string, d: DisclosureInput): Promise<void> {
+      const rn = vuln(reportNumber);
+      await gql(CREATE_DISCLOSURE_MUTATION, { submissionId: rn, conferenceTracking: tracking(d) }, "add disclosure");
+    },
+
+    async updateDisclosure(reportNumber: string, id: string, d: DisclosureInput): Promise<void> {
+      const rn = vuln(reportNumber);
+      await gql(UPDATE_DISCLOSURE_MUTATION, { submissionId: rn, conferenceId: eventId(id), conferenceTracking: tracking(d) }, "change disclosure");
+    },
+
+    async cancelDisclosure(reportNumber: string, id: string): Promise<void> {
+      await gql(CANCEL_DISCLOSURE_MUTATION, { submissionId: vuln(reportNumber), conferenceId: eventId(id) }, "cancel disclosure");
     },
 
     async createDraft(report: ReportInput): Promise<string> {

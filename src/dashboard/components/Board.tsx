@@ -9,11 +9,16 @@ import { StatusPill } from "./StageRail";
 
 export function CaseCard({ row, onOpen, showStatus }: { row: CaseRow; onOpen: (rn: string) => void; showStatus?: boolean }) {
   return (
-    <button class={["card", row.unseen ? "is-unseen" : "", row.closed ? "is-closed" : ""].join(" ")} onClick={() => onOpen(row.reportNumber)}>
+    <button class={["card", row.unseen ? "is-unseen" : "", row.closed ? "is-closed" : "", row.actionNeeded ? "is-action" : ""].join(" ")} onClick={() => onOpen(row.reportNumber)}>
       <span class="card__top">
         {row.unseen && <span class="card__new" title="New since your last visit" />}
         <span class="card__num">{caseLabel(row)}</span>
         {showStatus && <StatusPill stage={row.stage} text={humanizeEnum(row.status)} />}
+        {row.actionNeeded && (
+          <span class="card__action" title="MSRC has put this case on hold until you reply">
+            Action required
+          </span>
+        )}
         {row.cves[0] && (
           <span class="cve" title={row.cves.join(", ")}>
             {row.cves[0]}

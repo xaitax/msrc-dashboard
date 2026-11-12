@@ -2,7 +2,8 @@
 import { awardSummary, type AwardSummary } from "../core/awards";
 import { extractCves, msrcNamedCves } from "../core/cve";
 import { resolvePublicCves, type CveLinks, type PublicCve, type PublicMeta } from "../core/publicCves";
-import { caseStatus, caseTitle, isClosed, isUnseen, PIPELINE } from "../core/derive";
+import { caseStatus, caseStatusReason, caseTitle, isClosed, isUnseen, PIPELINE } from "../core/derive";
+import { needsAction } from "../core/statusGuide";
 import type { StatusHistory } from "../core/history";
 import { send, type AppState } from "../shared/protocol";
 import type { CaseRecord, ChangeEvent, DraftRef, ThreadMessage, VulnId } from "../shared/types";
@@ -27,6 +28,9 @@ export interface CaseRow {
   ticketNumber: string | null;
   title: string;
   status: string | null;
+  statusReason: string | null;
+  /** MSRC put the case on hold until the researcher replies. */
+  actionNeeded: boolean;
   prevStatus?: string;
   stage: Stage;
   prevStage?: Stage;
@@ -138,6 +142,7 @@ export function buildView(
     const evs = eventsByCase.get(c.reportNumber) ?? [];
     const unseen = evs.filter(isUnseen);
     const status = caseStatus(c);
+    const statusReason = caseStatusReason(c);
     const statusChange = unseen.find((e) => e.type === "status");
     const prevStatus = statusChange && typeof statusChange.oldValue === "string" ? statusChange.oldValue : undefined;
     const lastChange = evs[0] ?? null;
@@ -146,6 +151,8 @@ export function buildView(
       ticketNumber: c.list.ticketNumber,
       title: caseTitle(c),
       status,
+      statusReason,
+      actionNeeded: needsAction(statusReason),
       prevStatus,
       stage: stageOf(status),
       prevStage: prevStatus ? stageOf(prevStatus) : undefined,

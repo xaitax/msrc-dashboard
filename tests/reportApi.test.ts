@@ -1,5 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { CREATE_REPORT_MUTATION, DELETE_REPORT_DRAFT_MUTATION, REPORT_BY_ID_QUERY, SUBMIT_REPORT_MUTATION, UPDATE_REPORT_DRAFT_MUTATION } from "../src/background/queries";
+import {
+  CANCEL_DISCLOSURE_MUTATION,
+  CREATE_DISCLOSURE_MUTATION,
+  CREATE_REPORT_MUTATION,
+  DELETE_REPORT_DRAFT_MUTATION,
+  PORTAL_BANNERS_QUERY,
+  REPORT_BY_ID_QUERY,
+  SUBMIT_REPORT_MUTATION,
+  UPDATE_DISCLOSURE_MUTATION,
+  UPDATE_REPORT_DRAFT_MUTATION,
+} from "../src/background/queries";
 import { createReportApi, MaybeSentError, MESSAGE_TOPICS, WriteError } from "../src/dashboard/reportApi";
 
 const GUID = "124103c7-209b-4948-9aea-d48bdae6b026";
@@ -198,5 +208,54 @@ describe("a send that may or may not have reached MSRC", () => {
     const { api, calls } = harness([json({ value: "ok" })]);
     await api.sendMessage("VULN-1", "Hi");
     expect(calls[0]!.init.signal).toBeInstanceOf(AbortSignal);
+  });
+});
+
+describe("MSRC's banner on a case", () => {
+  it("reads it with the portal's query, by report number", async () => {
+    const banner = { id: "b1", key: "develop", body: "We're working on a fix.", tone: "INFO" };
+    const { api, calls } = harness([json({ data: { portalBanners: [banner] } })]);
+    expect(await api.portalBanners("VULN-123456")).toEqual([banner]);
+    expect(body(calls[0]!)).toEqual({ query: PORTAL_BANNERS_QUERY, variables: { reportNumber: "VULN-123456" } });
+    await expect(api.portalBanners("100140")).rejects.toThrow(WriteError);
+  });
+});
+
+describe("planned disclosures on a submitted case", () => {
+  const EVENT = "0f8fad5b-d9cb-469f-a165-70867728950e";
+
+  it("adds one with the portal's mutation; the date is midnight UTC or absent", async () => {
+    const { api, calls } = harness([json({ data: { createDisclosureEvent: EVENT } }), json({ data: { createDisclosureEvent: EVENT } })]);
+    await api.addDisclosure("VULN-123456", { medium: "CONFERENCE", name: "  A talk  ", date: "2027-03-01" });
+    await api.addDisclosure("VULN-123456", { medium: "BLOG", name: "https://example.com/post", date: "" });
+    expect(calls.map(body)).toEqual([
+      { query: CREATE_DISCLOSURE_MUTATION, variables: { submissionId: "VULN-123456", conferenceTracking: { medium: "CONFERENCE", name: "A talk", date: "2027-03-01T00:00:00Z" } } },
+      { query: CREATE_DISCLOSURE_MUTATION, variables: { submissionId: "VULN-123456", conferenceTracking: { medium: "BLOG", name: "https://example.com/post", date: null } } },
+    ]);
+  });
+
+  it("changes and cancels one by its id", async () => {
+    const { api, calls } = harness([json({ data: { updateDisclosureEvent: true } }), json({ data: { cancelDisclosureEvent: true } })]);
+    await api.updateDisclosure("VULN-123456", EVENT, { medium: "OTHER", name: "Paper", date: "2027-04-02" });
+    await api.cancelDisclosure("VULN-123456", EVENT);
+    expect(calls.map(body)).toEqual([
+      { query: UPDATE_DISCLOSURE_MUTATION, variables: { submissionId: "VULN-123456", conferenceId: EVENT, conferenceTracking: { medium: "OTHER", name: "Paper", date: "2027-04-02T00:00:00Z" } } },
+      { query: CANCEL_DISCLOSURE_MUTATION, variables: { submissionId: "VULN-123456", conferenceId: EVENT } },
+    ]);
+  });
+
+  it("rejects bad input before any request", async () => {
+    const { api, calls } = harness([]);
+    await expect(api.addDisclosure("VULN-1", { medium: "BLOG", name: " ", date: "" })).rejects.toThrow(/name/);
+    await expect(api.addDisclosure("VULN-1", { medium: "PODCAST", name: "x", date: "" })).rejects.toThrow(/medium/);
+    await expect(api.addDisclosure("VULN-1", { medium: "BLOG", name: "x", date: "1 March" })).rejects.toThrow(/date/);
+    await expect(api.addDisclosure("nope", { medium: "BLOG", name: "x", date: "" })).rejects.toThrow(/report number/);
+    await expect(api.cancelDisclosure("VULN-1", "a/b")).rejects.toThrow(/disclosure id/);
+    expect(calls).toHaveLength(0);
+  });
+
+  it("reports MSRC's error in words", async () => {
+    const { api } = harness([json({ errors: [{ message: "Not allowed" }] })]);
+    await expect(api.cancelDisclosure("VULN-1", EVENT)).rejects.toThrow("cancel disclosure: Not allowed");
   });
 });

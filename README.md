@@ -11,11 +11,12 @@ API the portal uses, so a portal update can break parts of it at any time.
 ## What it does
 
 - **Board.** Your cases in columns by MSRC stage (New, Review / Repro, Develop, Pre-release,
-  Complete), with what changed since your last visit on top. Search with `/`, step through cases
-  with `j` and `k`.
+  Complete), with what changed since your last visit on top. A case MSRC has put on hold until you
+  reply is marked **Action required**. Search with `/`, step through cases with `j` and `k`.
 - **Case page.** Every field the portal has, plus one timeline of messages, status changes (with
-  the exact time from MSRC's notification feed) and file uploads. Messages and report text render
-  as Markdown.
+  the exact time from MSRC's notification feed) and file uploads. On top, MSRC's banner for the case
+  and the portal's explanation of what the status means and what, if anything, you should do.
+  Messages and report text render as Markdown.
 - **Notifications.** A desktop notification when MSRC replies, a status or bounty changes, or a CVE
   appears. It checks every 2 minutes (two requests when nothing changed) and re-reads everything
   every 6 hours.
@@ -27,6 +28,12 @@ API the portal uses, so a portal update can break parts of it at any time.
   encrypted the same way the portal does it, a checklist of what MSRC requires, and a typed
   confirmation before submitting.
 - **Messages.** A message box on each case, with a preview before anything is sent.
+- **Planned disclosures.** Add, change or cancel a planned talk or blog post on a submitted case,
+  as on the portal's Disclosure tab. Each change is confirmed in a dialog first.
+- **MSRC announcements.** The portal's site-wide alert and banners appear at the top, dismissible.
+- **Portal internals.** A page (linked from Profile) showing what the portal publishes about
+  itself: its AI pre-screening setup, the environments compiled into its script, and its feature
+  flags with MSRC's own descriptions.
 - **Export.** One JSON file with everything about your cases, including a field guide for an LLM.
 - **Staying signed in.** The portal's session is kept alive and renewed in a background tab, so
   there's no daily sign-in.
@@ -49,6 +56,7 @@ Node.js 22.12 or later:
 Keep Developer mode on. With it off, Brave and Chrome may disable unpacked extensions on restart.
 
 To update, replace the folder, then click the reload icon on the extension's card. Your data stays.
+[CHANGELOG.md](CHANGELOG.md) lists what changed in each version.
 
 ## Security and privacy
 
@@ -65,9 +73,9 @@ Read this before installing.
   API and its sign-in service.
 - **The public CVE check sends nothing about you.** It reads the Security Update Guide without
   signing in, and matches your credit name on your machine.
-- **Nothing is sent to MSRC without a click.** Saving a draft, attaching a file, submitting and
-  sending a message are each an explicit action. Submitting and attaching ask for confirmation,
-  because neither can be undone.
+- **Nothing is sent to MSRC without a click.** Saving a draft, attaching a file, submitting,
+  sending a message and changing a planned disclosure are each an explicit action. Submitting,
+  attaching, sending and cancelling a disclosure ask for confirmation, because none can be undone.
 - **Exports contain your case data** (titles, report text, messages) but never login tokens.
 
 Removing the extension deletes everything it stored.

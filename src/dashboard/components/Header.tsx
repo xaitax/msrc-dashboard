@@ -7,8 +7,10 @@ export type Page = "cases" | "activity" | "recognition" | "profile";
 
 interface Props {
   state: AppState;
-  page: Page | "case" | "new" | "draft";
+  page: Page | "case" | "new" | "draft" | "internals";
   onPage: (p: Page) => void;
+  /** The title: back to the cases board, search cleared. */
+  onHome: () => void;
   unseen: number;
   points: number;
   /** Bounty awards on the researcher's cases, in US dollars. */
@@ -31,13 +33,21 @@ export const NAV: [Page, string][] = [
 export function Header(p: Props) {
   const s = p.state;
   const status = s.syncing ? "Syncing…" : s.lastError ? `Sync failed: ${s.lastError}` : `Synced ${ago(s.lastSyncAt)}`;
-  const active = p.page === "case" ? "cases" : p.page === "new" || p.page === "draft" ? null : p.page;
+  const active = p.page === "case" ? "cases" : p.page === "new" || p.page === "draft" || p.page === "internals" ? null : p.page;
   return (
     <header class="top">
-      <div class="brand">
+      <a
+        class="brand"
+        href="#cases"
+        title="All cases"
+        onClick={(e) => {
+          e.preventDefault();
+          p.onHome();
+        }}
+      >
         <span class="brand__mark" aria-hidden="true" />
         <span class="brand__name">MSRC Dashboard</span>
-      </div>
+      </a>
       <nav class="nav" aria-label="Pages">
         {NAV.map(([key, label]) => (
           <button key={key} class="nav__item" aria-current={active === key ? "page" : undefined} onClick={() => p.onPage(key)}>

@@ -434,6 +434,10 @@ export function ProfilePage() {
           </div>
         </dl>
       )}
+      <p class="page__foot">
+        <a href="#internals">Portal internals</a>
+        <span class="muted">: what the portal publishes about itself, from its AI pre-screening to its test environments.</span>
+      </p>
     </main>
   );
 }

@@ -6,6 +6,8 @@ import { Board, Drafts, SinceStrip } from "./components/Board";
 import { CasePanel } from "./components/CasePanel";
 import { ExportDialog } from "./components/ExportDialog";
 import { Header, NAV, type Page } from "./components/Header";
+import { Announcements } from "./components/Announcements";
+import { InternalsPage } from "./components/Internals";
 import { ActivityPage, ProfilePage, RecognitionPage } from "./components/Pages";
 import { PublicCveStrip } from "./components/PublicCves";
 import { Progress } from "./components/Progress";
@@ -13,16 +15,22 @@ import { ReportEditor } from "./components/report/ReportEditor";
 import { unsavedNewTitle } from "./reportLocal";
 import { byRecency, loadView, pinUnseen, type CaseRow, type ViewModel } from "./data";
 import { PORTAL_REPORTS } from "../shared/urls";
+import { loadInternals, loadSettings } from "./portalInfo";
 import { isUnseen } from "../core/derive";
 
 
-type Route = { page: Page } | { page: "case"; rn: string } | { page: "new" } | { page: "draft"; id: string };
+type Route = { page: Page } | { page: "case"; rn: string } | { page: "new" } | { page: "draft"; id: string } | { page: "internals" };
+
+// Stable references: the components reload when these change.
+const portalSettings = () => loadSettings(fetch);
+const portalInternals = () => loadInternals(fetch);
 
 function parseHash(): Route {
   const h = location.hash.replace(/^#/, "");
   const m = /^case=(VULN-\d+)$/.exec(h);
   if (m && isVulnId(m[1])) return { page: "case", rn: m[1]! };
   if (h === "new") return { page: "new" };
+  if (h === "internals") return { page: "internals" };
   const d = /^draft=(.+)$/.exec(h);
   if (d && isGuid(d[1])) return { page: "draft", id: d[1]! };
   const page = NAV.find(([key]) => key === h)?.[0];
@@ -136,6 +144,11 @@ export function App() {
         state={st}
         page={route.page}
         onPage={(p) => go(p)}
+        onHome={() => {
+          setQuery("");
+          if (route.page === "cases") window.scrollTo(0, 0);
+          else go("cases");
+        }}
         unseen={view.unseen}
         points={view.points.total}
         awarded={view.awards.total}
@@ -146,6 +159,8 @@ export function App() {
         onExport={() => setExporting(true)}
         onNew={() => go("new")}
       />
+
+      <Announcements load={portalSettings} />
 
       {st.auth === "signed_out" && (
         <div class="banner banner--warn" role="status">
@@ -228,6 +243,8 @@ export function App() {
         <ActivityPage view={view} onOpen={openCase} onMarkSeen={() => void send({ type: "seen:mark" })} />
       ) : route.page === "recognition" ? (
         <RecognitionPage view={view} />
+      ) : route.page === "internals" ? (
+        <InternalsPage loadSettings={portalSettings} loadInternals={portalInternals} />
       ) : (
         <ProfilePage />
       )}
