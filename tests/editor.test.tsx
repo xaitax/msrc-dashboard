@@ -78,6 +78,48 @@ const button = (re: RegExp) => [...host.querySelectorAll("button")].find((b) => 
 const ctrlS = () => document.dispatchEvent(new KeyboardEvent("keydown", { key: "s", ctrlKey: true, bubbles: true }));
 
 describe("report editor", () => {
+  it("follows the portal's submission section order", async () => {
+    fakeMsrc();
+    mountEditor(null);
+    await settle();
+    expect([...host.querySelectorAll(".report-main .rsec h2")].map((h) => h.textContent)).toEqual([
+      "Proof of concept", "Security impact", "Acknowledgement", "Public disclosure", "Additional information",
+    ]);
+    expect((host.querySelector("#in-title") as HTMLInputElement).maxLength).toBe(200);
+  });
+
+  it("previews Markdown locally and returns to the unchanged draft", async () => {
+    const ops = fakeMsrc();
+    mountEditor(null);
+    await settle();
+    await typeInto("#in-title", "Preview test");
+    await typeInto("#in-description", "A **bold** finding with <script>alert(1)</script> text.");
+    await act(async () => button(/^Preview report$/).click());
+    await settle();
+    const preview = host.querySelector(".dialog--report-preview")!;
+    expect(preview.querySelector("strong")?.textContent).toBe("bold");
+    expect(preview.textContent).toContain("<script>alert(1)</script>");
+    expect(preview.querySelector("script")).toBeNull();
+    expect(ops).toEqual([]);
+    await act(async () => button(/^Back to editing$/).click());
+    await settle();
+    expect((host.querySelector("#in-description") as HTMLTextAreaElement).value).toBe("A **bold** finding with <script>alert(1)</script> text.");
+  });
+
+  it("previews call stack Markdown in the field and in the report preview", async () => {
+    const ops = fakeMsrc();
+    mountEditor(null);
+    await settle();
+    await typeInto("#in-callstack", "## Stack\n**frame** and `symbol`");
+    await act(async () => (host.querySelector("#f-callstack .mdf__tabs button:last-child") as HTMLButtonElement).click());
+    await settle();
+    expect(host.querySelector("#f-callstack .mdf__preview strong")?.textContent).toBe("frame");
+    await act(async () => button(/^Preview report$/).click());
+    await settle();
+    expect(host.querySelector(".dialog--report-preview strong")?.textContent).toBe("frame");
+    expect(ops).toEqual([]);
+  });
+
   it("first save of a new report keeps text typed while it saves and reloads nothing", async () => {
     const hold = { UpdateVulnerabilityReportDraft: deferred<void>() };
     const ops = fakeMsrc({ hold });
@@ -165,8 +207,25 @@ describe("attachments", () => {
 describe("submit dialog", () => {
   it("warns about files that were picked but never attached", async () => {
     const form = { ...emptyForm(), title: "Bug" };
-    render(<SubmitDialog form={form} issues={[]} fileCount={0} pendingFiles={1} onClose={() => {}} onFix={() => {}} onSubmit={async () => "VULN-9"} onDone={() => {}} />, host);
+    render(<SubmitDialog form={form} issues={[]} fileCount={0} pendingFiles={1} onClose={() => {}} onFix={() => {}} onCheck={async () => { throw Error("should not run"); }} onSubmit={async () => "VULN-9"} onDone={() => {}} />, host);
     await settle();
-    expect(host.textContent).toMatch(/1 file is picked but not attached/);
+    expect(host.textContent).toMatch(/Attach your picked file before checking/);
+    expect(button(/Run MSRC checks/).disabled).toBe(true);
+  });
+
+  it("shows MSRC's classification and quality advice before the final confirmation", async () => {
+    let checked = 0;
+    render(<SubmitDialog form={{ ...emptyForm(), title: "Synthetic" }} issues={[]} fileCount={0} onClose={() => {}} onFix={() => {}}
+      onCheck={async () => { checked++; return { analysis: { submissionId: "id", isMsrc: false, classification: "NON_MSRC", confidence: 0.9, reason: "May be outside scope", suggestedCategory: null, educationalTips: [] }, quality: { gatesTriggered: [{ gate: "MISSING_POC", aiConfirmed: true }], showNudge: true } }; }}
+      onSubmit={async () => "VULN-9"} onDone={() => {}} />, host);
+    await settle();
+    expect(host.textContent).toContain("Check this report with MSRC");
+    expect(checked).toBe(0);
+    await act(async () => button(/Run MSRC checks/).click());
+    await settle();
+    expect(checked).toBe(1);
+    expect(host.textContent).toContain("May be outside MSRC's scope");
+    expect(host.textContent).toContain("No proof of concept");
+    expect(host.textContent).toContain("Type SUBMIT to confirm");
   });
 });

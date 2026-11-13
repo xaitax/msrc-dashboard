@@ -1,16 +1,33 @@
 # MSRC Dashboard
 
-A browser extension for researchers who report vulnerabilities to Microsoft through the
-[MSRC Researcher Portal](https://msrc.microsoft.com/report/vulnerability). It keeps a copy of your
-submissions on your own machine, shows what changed and when, notifies you about new activity, and
-lets you write reports and messages without the portal.
+## Executive summary
 
-This is an unofficial tool. It is not affiliated with or endorsed by Microsoft. It talks to the same
-API the portal uses, so a portal update can break parts of it at any time.
+MSRC Dashboard is a browser extension that makes the everyday vulnerability-reporting workflow
+easier to manage. Sign in to the [MSRC Researcher Portal](https://msrc.microsoft.com/report/vulnerability)
+once, then use the dashboard as your main workspace for drafting and submitting reports, attaching
+evidence, replying to cases, and managing planned disclosures. Before submission, you can preview
+your report and run MSRC's own AI assessment and report-quality checks.
+
+The dashboard brings your submissions into one local view and makes changes easier to spot: new
+messages, status and bounty updates, cases that need a response, disclosure timing, public CVEs,
+recognition points, and award totals. It renews your session in the background and sends desktop
+notifications, so you can keep up with your cases without repeatedly signing in or checking each
+one by hand.
+
+MSRC remains the source of truth. You can open any case in the portal when needed, while the
+dashboard handles most day-to-day researcher work in a more focused interface. Changes to the
+portal's API may require updates to the extension.
+
+> [!IMPORTANT]
+> **Unofficial, independent project.** MSRC Dashboard is not a Microsoft product and is not
+> affiliated with, sponsored by, or endorsed by Microsoft or the Microsoft Security Response
+> Center (MSRC).
+
+Licensed under the [MIT License](LICENSE).
 
 ![The board: cases in columns by MSRC stage, what changed since your last visit, and tags for cases that need attention](screenshots/board.webp)
 
-<sub>The screenshots show real cases. Titles, case numbers, CVEs, amounts, names and message text are scrambled and blurred.</sub>
+<sub>Case screenshots show real cases with identifying details scrambled and blurred. The report screenshot uses sample text.</sub>
 
 ## What it does
 
@@ -18,7 +35,7 @@ API the portal uses, so a portal update can break parts of it at any time.
   Complete), with what changed since your last visit on top. A case MSRC has put on hold until you
   reply is marked **Action required**. Cases near or past the 90-day disclosure mark, and cases MSRC
   has gone quiet on, are tagged. Search with `/`, step through cases with `j` and `k`.
-- **Case page.** Every field the portal has, plus one timeline of messages, status changes (with
+- **Case page.** The portal's case data, including cross-tenant impact and Canary reproduction answers, plus one timeline of messages, status changes (with
   the exact time from MSRC's notification feed) and file uploads. On top: the case's day against the
   90-day mark and when MSRC last wrote, MSRC's banner for the case, and the portal's explanation of
   what the status means and what, if anything, you should do.
@@ -31,8 +48,9 @@ API the portal uses, so a portal update can break parts of it at any time.
 - **Recognition and bounties.** Recognition points per case (the portal stores them but doesn't
   show them), leaderboards, and the bounty awards added up across your cases.
 - **Reports.** MSRC's report form on one page: drafts saved on MSRC, local autosave, attachments
-  encrypted the same way the portal does it, a checklist of what MSRC requires, and a typed
-  confirmation before submitting.
+  encrypted the same way the portal does it, a checklist of what MSRC requires, active-exploit
+  details, MSRC's AI case assessment and quality checks before submission, and a typed
+  confirmation before submitting. Running the checks saves a draft on MSRC first.
 - **Messages.** A message box on each case, with a preview before anything is sent.
 - **Planned disclosures.** Add, change or cancel a planned talk or blog post on a submitted case,
   as on the portal's Disclosure tab. Each change is confirmed in a dialog first.
@@ -68,10 +86,13 @@ Nothing goes to MSRC until you've seen the message in a preview and confirmed it
 
 ### Reports
 
-![The report form: title, impact and description filled in, and the Ready to submit checklist at 4 of 6](screenshots/report.webp)
+![The new report form with a sample title, Markdown preview, and ready-to-submit checklist](screenshots/report.png)
 
-MSRC's report form on one page, with a checklist of what MSRC requires before you submit. Drafts
-are saved on MSRC, and your text is also kept locally as you type.
+MSRC's report sections in the portal's order—proof of concept, security impact, acknowledgement,
+public disclosure, and additional information—with a checklist of what MSRC requires before you submit. Use
+**Preview report** for a local Markdown preview of the complete report text, or the Write/Preview
+tabs beside individual text fields. Drafts are saved on MSRC, and your text is also kept locally as
+you type.
 
 ### Recognition and bounties
 

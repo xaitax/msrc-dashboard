@@ -38,4 +38,9 @@ describe("local autosave", () => {
     localStorage.setItem(localKey(null), JSON.stringify({ form: { title: "Old" }, at: 2 }));
     expect(loadLocal(null)).toEqual({ form: { ...emptyForm(), title: "Old" }, at: 2 });
   });
+
+  it("moves old hidden exploit details into editable fields", () => {
+    localStorage.setItem(localKey(null), JSON.stringify({ form: { title: "Old", isExploited: true, keep: { isExploitedDiscovery: "Telemetry", isExploitedScale: "Small", aiConversationId: "chat" } }, at: 3 }));
+    expect(loadLocal(null)?.form).toMatchObject({ isExploitedDiscovery: "Telemetry", isExploitedScale: "Small", aiConversationId: "chat", keep: { aiConversationId: "chat" } });
+  });
 });

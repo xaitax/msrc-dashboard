@@ -4,6 +4,7 @@
 // messages allow); the service worker only hands out the access token
 // (`auth:token`). Every call here is triggered by an explicit click.
 import {
+  ANALYZE_REPORT_MUTATION,
   CANCEL_DISCLOSURE_MUTATION,
   CREATE_DISCLOSURE_MUTATION,
   CREATE_REPORT_MUTATION,
@@ -13,6 +14,7 @@ import {
   SUBMIT_REPORT_MUTATION,
   UPDATE_DISCLOSURE_MUTATION,
   UPDATE_REPORT_DRAFT_MUTATION,
+  VALIDATE_QUALITY_GATES_MUTATION,
 } from "../background/queries";
 import { attachFieldName, encryptForMsrc, type MsrcJwk } from "../core/attachCrypto";
 import { MEDIA, type ReportInput } from "../core/reportForm";
@@ -58,6 +60,28 @@ export interface DraftFile {
   id: string;
   name: string;
   createdOn: string | null;
+}
+
+export interface ReportAnalysis {
+  submissionId: string | null;
+  isMsrc: boolean | null;
+  classification: string | null;
+  confidence: number | null;
+  reason: string | null;
+  suggestedCategory: string | null;
+  educationalTips: unknown;
+}
+
+export interface QualityResult {
+  gatesTriggered: { gate: string; aiConfirmed: boolean }[];
+  showNudge: boolean;
+}
+
+export interface PreSubmitText {
+  title: string;
+  description: string;
+  reproductionSteps: string;
+  callstack: string;
 }
 
 export class WriteError extends Error {
@@ -204,6 +228,28 @@ export function createReportApi(d: ReportApiDeps) {
 
     async updateDraft(id: string, report: ReportInput): Promise<void> {
       await gql(UPDATE_REPORT_DRAFT_MUTATION, { reportId: guid(id), report }, "save draft");
+    },
+
+    /** MSRC's non-case pre-check. Pass the saved draft id so it cannot create
+     * a second draft. The portal otherwise creates a draft as a side effect. */
+    async analyzeDraft(id: string, report: PreSubmitText): Promise<ReportAnalysis> {
+      const draftId = guid(id);
+      const d = await gql<{ analyzeVulnerabilityReport: ReportAnalysis }>(ANALYZE_REPORT_MUTATION, { report: { id: draftId, ...report } }, "analyze report");
+      const result = d.analyzeVulnerabilityReport;
+      if (!result || result.submissionId?.toLowerCase() !== draftId.toLowerCase())
+        throw new WriteError("MSRC's analysis did not refer to this draft. Check your drafts in the portal before continuing.");
+      return result;
+    },
+
+    /** Advisory quality gates. The server also runs them during submission. */
+    async validateQuality(report: PreSubmitText, fileCount: number | null): Promise<QualityResult> {
+      const clientTriggeredGates = [
+        ...(fileCount === 0 ? ["MISSING_ATTACHMENT"] : []),
+        "LOW_QUALITY_REPRO",
+        "MISSING_POC",
+      ];
+      const d = await gql<{ validateQualityGates: QualityResult }>(VALIDATE_QUALITY_GATES_MUTATION, { report, clientTriggeredGates }, "quality check");
+      return d.validateQualityGates;
     },
 
     async getReport(id: string): Promise<Record<string, unknown> | null> {

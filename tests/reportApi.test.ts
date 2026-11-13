@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  ANALYZE_REPORT_MUTATION,
   CANCEL_DISCLOSURE_MUTATION,
   CREATE_DISCLOSURE_MUTATION,
   CREATE_REPORT_MUTATION,
@@ -9,6 +10,7 @@ import {
   SUBMIT_REPORT_MUTATION,
   UPDATE_DISCLOSURE_MUTATION,
   UPDATE_REPORT_DRAFT_MUTATION,
+  VALIDATE_QUALITY_GATES_MUTATION,
 } from "../src/background/queries";
 import { createReportApi, MaybeSentError, MESSAGE_TOPICS, WriteError } from "../src/dashboard/reportApi";
 
@@ -41,6 +43,26 @@ function harness(responses: (Response | (() => Response))[]) {
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 const header = (c: Call, h: string) => new Headers(c.init.headers).get(h);
 const body = (c: Call) => JSON.parse(String(c.init.body));
+
+describe("MSRC pre-submit checks", () => {
+  const report = { title: "T", description: "D", reproductionSteps: "R", callstack: "" };
+  it("analyzes an existing draft and requests the portal's quality gates", async () => {
+    const analysis = { submissionId: GUID, isMsrc: true, classification: "MSRC", confidence: 0.91, reason: "Relevant", suggestedCategory: null, educationalTips: [] };
+    const quality = { gatesTriggered: [{ gate: "MISSING_POC", aiConfirmed: true }], showNudge: true };
+    const { api, calls } = harness([json({ data: { analyzeVulnerabilityReport: analysis } }), json({ data: { validateQualityGates: quality } })]);
+    expect(await api.analyzeDraft(GUID, report)).toEqual(analysis);
+    expect(await api.validateQuality(report, 0)).toEqual(quality);
+    expect(body(calls[0]!)).toEqual({ query: ANALYZE_REPORT_MUTATION, variables: { report: { id: GUID, ...report } } });
+    expect(body(calls[1]!)).toEqual({ query: VALIDATE_QUALITY_GATES_MUTATION, variables: { report, clientTriggeredGates: ["MISSING_ATTACHMENT", "LOW_QUALITY_REPRO", "MISSING_POC"] } });
+  });
+
+  it("does not request an attachment gate when files exist or accept a different draft id", async () => {
+    const { api, calls } = harness([json({ data: { validateQualityGates: { gatesTriggered: [], showNudge: false } } }), json({ data: { analyzeVulnerabilityReport: { submissionId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" } } })]);
+    await api.validateQuality(report, 2);
+    expect(body(calls[0]!).variables.clientTriggeredGates).toEqual(["LOW_QUALITY_REPRO", "MISSING_POC"]);
+    await expect(api.analyzeDraft(GUID, report)).rejects.toThrow(/did not refer to this draft/);
+  });
+});
 
 describe("report drafts", () => {
   it("creates a draft with the verbatim mutation and returns its id", async () => {

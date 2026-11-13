@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.3.0 (2026-11-13)
+
+### Added
+
+- Case pages show the recorded cross-tenant impact and Windows Insider Canary reproduction answers.
+- The report editor includes the portal's active-exploit discovery and scale fields, optional AI conversation ID, and link and CVSS limits.
+- A report-wide Markdown preview is available from the new report's side panel, alongside the per-field Write/Preview tabs.
+- The call stack field has its own Markdown preview, and the report-wide preview renders it the same way.
+- The new-report form follows the portal's section order, puts attachments with the proof of concept, and uses the portal's 200-character title limit. Section headings and spacing have been refined.
+- Before final submission, the dashboard can run MSRC's own AI case assessment and quality gates. It saves the report as a draft, shows the advice, then still requires typed confirmation to submit. A failed check can be bypassed explicitly.
+
 ## 0.2.2 (2026-11-12)
 
 ### Added

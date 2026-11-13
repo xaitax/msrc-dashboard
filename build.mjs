@@ -23,6 +23,9 @@ rmSync("dist", { recursive: true, force: true });
 mkdirSync("dist", { recursive: true });
 cpSync("static", "dist", { recursive: true });
 // Fonts (Instrument Sans, SIL OFL) live in static/fonts/ and are copied with the rest.
+cpSync("LICENSE", "dist/LICENSE");
+mkdirSync("dist/licenses", { recursive: true });
+cpSync("node_modules/preact/LICENSE", "dist/licenses/preact-LICENSE.txt");
 
 if (watch) {
   for (const b of builds) await (await esbuild.context(b)).watch();

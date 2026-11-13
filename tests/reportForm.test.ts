@@ -42,6 +42,7 @@ describe("toReportInput", () => {
       callstack: null,
       securityImpact: "ELEVATION_OF_PRIVILEGE",
       aiSafetyImpact: null,
+      aiConversationId: null,
       targetList: [{ product: "WINDOWS", productVersion: "26100", componentName: "broker.exe", componentVersion: "1.0", componentLocation: "C:\\x", componentRepository: null }],
       attackScenario: "LOCAL_L1",
       devChannelRepro: "YES",
@@ -52,6 +53,8 @@ describe("toReportInput", () => {
       externalId: null,
       isPublic: null,
       isExploited: null,
+      isExploitedDiscovery: null,
+      isExploitedScale: null,
       isMissedFix: null,
       variantOrRelatedCVE: null,
       variantCaseOrSubmission: null,
@@ -71,6 +74,18 @@ describe("toReportInput", () => {
     expect(p.targetList).toHaveLength(1);
     expect(p.linkList).toEqual([]);
     expect(p.disclosureEventList).toEqual([]);
+  });
+
+  it("sends active exploitation details and enforces the portal's length limit", () => {
+    const f = complete();
+    f.isExploited = true;
+    f.isExploitedDiscovery = "Found in telemetry";
+    f.isExploitedScale = "Several customers";
+    expect(toReportInput(f)).toMatchObject({ isExploitedDiscovery: "Found in telemetry", isExploitedScale: "Several customers" });
+    f.isExploitedScale = "x".repeat(1001);
+    expect(fields(f, "save")).toContain("isExploitedScale");
+    f.isExploited = false;
+    expect(toReportInput(f)).toMatchObject({ isExploitedDiscovery: null, isExploitedScale: null });
   });
 
   it("sends no acknowledgements for an anonymous submission", () => {
@@ -127,6 +142,12 @@ describe("validate", () => {
     expect(fields(f, "save")).toEqual(["title"]);
     f.title = "x";
     expect(fields(f, "save")).toEqual([]);
+  });
+
+  it("uses the portal's 200-character title limit", () => {
+    const f = complete();
+    f.title = "x".repeat(201);
+    expect(fields(f, "save")).toEqual(["title"]);
   });
 
   it("submitting enforces the portal's rules", () => {
@@ -270,11 +291,23 @@ describe("review fixes", () => {
     expect(fromReport(server).disclosures.map((d) => d.name)).toEqual(["Blog"]);
   });
 
-  it("keeps fields the editor doesn't show, because an update replaces the whole draft", () => {
+  it("round-trips active exploit details while an update replaces the whole draft", () => {
     const p = toReportInput(fromReport(server));
     expect(p).toMatchObject({ isExploitedDiscovery: "In the wild" });
-    expect(p).not.toHaveProperty("isExploitedScale"); // null on MSRC: nothing to keep
-    expect(toReportInput(emptyForm())).not.toHaveProperty("aiConversationId");
+    expect(p.isExploitedScale).toBeNull();
+    expect(toReportInput(emptyForm()).aiConversationId).toBeNull();
+  });
+
+  it("includes a conversation ID only for AI reports", () => {
+    const f = emptyForm();
+    f.aiConversationId = "conversation-1";
+    f.securityImpact = "AI_DERIVED_HARM";
+    expect(toReportInput(f).aiConversationId).toBe("conversation-1");
+    f.securityImpact = "";
+    f.targets[0]!.product = "AI";
+    expect(toReportInput(f).aiConversationId).toBe("conversation-1");
+    f.targets[0]!.product = "OFFICE";
+    expect(toReportInput(f).aiConversationId).toBeNull();
   });
 
   it("an untouched new link or disclosure row neither blocks saving nor is sent", () => {

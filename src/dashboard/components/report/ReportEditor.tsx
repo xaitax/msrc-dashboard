@@ -31,11 +31,12 @@ import {
 import { isVulnId } from "../../../shared/ids";
 import { errorText, send } from "../../../shared/protocol";
 import { ago, when } from "../../format";
-import { createReportApi, WriteError } from "../../reportApi";
+import { createReportApi, WriteError, type ReportAnalysis, type QualityResult } from "../../reportApi";
 import { pageToken, syncSoon } from "../../pageToken";
 import { clearLocal, loadLocal, saveLocal } from "../../reportLocal";
 import { Attachments } from "./Attachments";
 import { Choice, Field, MdArea, Select, Text, YesNo } from "./fields";
+import { ReportPreviewDialog } from "./ReportPreviewDialog";
 import { SubmitDialog } from "./SubmitDialog";
 import { portalDraftUrl } from "../../../shared/urls";
 import type { ComponentChildren } from "preact";
@@ -48,7 +49,7 @@ type RowKey = "targets" | "links" | "acknowledgements" | "disclosures";
 const sig = (f: ReportForm) => JSON.stringify(toReportInput(f));
 const prefilled = (d: Defaults | null): ReportForm => ({ ...emptyForm(), acknowledgements: d?.ack?.name ? [d.ack] : [], anonymousSubmission: d?.anonymous ?? false });
 const hasMore = (f: ReportForm) =>
-  f.cwes.length > 0 || !!f.cvssVectorString || f.links.length > 0 || f.isPublic !== null || f.isExploited !== null || f.isMissedFix !== null || !!f.externalId || !!f.hasCrossTenantImpact;
+  f.cwes.length > 0 || !!f.cvssVectorString || f.links.length > 0 || f.isPublic !== null || f.isExploited !== null || !!f.isExploitedDiscovery || !!f.isExploitedScale || f.isMissedFix !== null || !!f.externalId;
 
 function focusField(field: string) {
   const el = document.getElementById(`f-${field}`);
@@ -75,6 +76,7 @@ export function ReportEditor(p: { id: string | null; cases: { reportNumber: stri
   const [saveError, setSaveError] = useState<string | null>(null);
   const [attempted, setAttempted] = useState(false);
   const [submitOpen, setSubmitOpen] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [fileCount, setFileCount] = useState<number | null>(null);
   const [defaults, setDefaults] = useState<Defaults | null>(null);
@@ -240,12 +242,37 @@ export function ReportEditor(p: { id: string | null; cases: { reportNumber: stri
     const left = validate(form, "submit");
     if (left.length) throw new WriteError(left[0]!.message);
     await inflight.current?.catch(() => undefined);
-    const r = await save(); // never submit text MSRC doesn't have yet
+    // A successful pre-check already saved this exact form. Re-saving would
+    // replace fields MSRC may have added during analysis.
+    const r = id && !dirty ? { id, rn } : await save();
     await api.submit(r.id);
     clearLocal(r.id);
     setStatus("SUBMITTED");
     syncSoon();
     return r.rn ?? "";
+  };
+
+  const checkBeforeSubmit = async (): Promise<{ analysis: ReportAnalysis; quality: QualityResult }> => {
+    const left = validate(form, "submit");
+    if (left.length) throw new WriteError(left[0]!.message);
+    await inflight.current?.catch(() => undefined);
+    const snapshot = form;
+    const knownFileCount = rn ? fileCount : 0;
+    const r = await save(); // explicit click; the saved id prevents an extra AI-created draft
+    const text = { title: snapshot.title, description: snapshot.description, reproductionSteps: snapshot.reproductionSteps, callstack: snapshot.callstack };
+    const analysis = await api.analyzeDraft(r.id, text);
+    // Analysis can add hidden draft metadata (notably aiConversationId). Keep
+    // it so a later edit does not clear it in the portal's replace-all update.
+    const analyzedDraft = await api.getReport(r.id);
+    if (!analyzedDraft) throw new WriteError("MSRC analyzed the draft, but it could not be reloaded. Check it in the portal before continuing.");
+    const analyzed = fromReport(analyzedDraft);
+    const merged = { ...snapshot, aiConversationId: analyzed.aiConversationId, keep: analyzed.keep };
+    formRef.current = merged;
+    setForm(merged);
+    setBase(sig(merged));
+    setServerForm(merged);
+    const quality = await api.validateQuality(text, knownFileCount);
+    return { analysis, quality };
   };
 
   const remove = async () => {
@@ -358,11 +385,41 @@ export function ReportEditor(p: { id: string | null; cases: { reportNumber: stri
           </div>
         )}
 
-        <section class="rsec" aria-labelledby="sec-what">
-          <h2 id="sec-what">What you found</h2>
+        <section class="rsec" aria-labelledby="sec-proof">
+          <div class="rsec__heading">
+            <span class="rsec__step" aria-hidden="true">01</span>
+            <div>
+              <h2 id="sec-proof">Proof of concept</h2>
+              <p>Describe the issue clearly and include steps and evidence MSRC can use to reproduce it.</p>
+            </div>
+          </div>
           <Field id="title" label="Title" error={err("title")}>
-            <Text id="in-title" class="rf__title" value={form.title} maxLength={500} placeholder="e.g. Elevation of privilege in ExampleService via …" onChange={(v) => set("title", v)} />
+            <Text id="in-title" class="rf__title" value={form.title} maxLength={200} placeholder="e.g. Elevation of privilege in ExampleService via …" onChange={(v) => set("title", v)} />
+            <p class="rf__count">{Math.max(0, 200 - form.title.length)} of 200 characters remaining</p>
           </Field>
+          <Field id="description" label="Vulnerability description" error={err("description")} hint="Markdown works. Screenshots go in Attachments; MSRC doesn't accept inline images.">
+            <MdArea id="description" value={form.description} rows={10} min={LIMITS.description[0]} max={LIMITS.description[1]} placeholder="What is the bug, where is it, and what can an attacker do with it?" onChange={(v) => set("description", v)} />
+          </Field>
+          <Field id="reproductionSteps" label="Steps to reproduce" error={err("reproductionSteps")} hint="Exact enough to reproduce without guessing: setup, steps in order, expected and actual result.">
+            <MdArea id="reproductionSteps" value={form.reproductionSteps} rows={10} max={LIMITS.reproductionSteps[1]} placeholder={"1. …\n2. …"} onChange={(v) => set("reproductionSteps", v)} />
+          </Field>
+          <Field id="callstack" label="Call stack" hint="If it crashes. Use a fenced code block to preserve stack formatting in the preview.">
+            <MdArea id="callstack" value={form.callstack} rows={6} mono onChange={(v) => set("callstack", v)} />
+          </Field>
+          <div class="rsec__sub">
+            <h3>Attachments</h3>
+            <Attachments api={api} reportNumber={rn} onCount={setFileCount} onPending={setPendingFiles} />
+          </div>
+        </section>
+
+        <section class="rsec" aria-labelledby="sec-impact">
+          <div class="rsec__heading">
+            <span class="rsec__step" aria-hidden="true">02</span>
+            <div>
+              <h2 id="sec-impact">Security impact</h2>
+              <p>Choose the impact and identify the affected Microsoft products and components.</p>
+            </div>
+          </div>
           <div class="rf-row">
             <Field id="securityImpact" label="Security impact" error={err("securityImpact")}>
               <Select id="in-securityImpact" value={form.securityImpact} options={IMPACTS} onChange={(v) => set("securityImpact", v)} />
@@ -400,6 +457,12 @@ export function ReportEditor(p: { id: string | null; cases: { reportNumber: stri
             )}
           </Field>
 
+          {(form.securityImpact === "AI_DERIVED_HARM" || form.targets.some((t) => t.product === "AI")) && (
+            <Field id="aiConversationId" label="AI conversation ID" error={err("aiConversationId")} hint="The AI-related conversation's unique ID, if available.">
+              <Text id="in-aiConversationId" value={form.aiConversationId} maxLength={100} placeholder="123e4567-e89b-12d3-a456-426614174000" onChange={(v) => set("aiConversationId", v)} />
+            </Field>
+          )}
+
           {scenario && (
             <Field
               id="attackScenario"
@@ -425,28 +488,16 @@ export function ReportEditor(p: { id: string | null; cases: { reportNumber: stri
               <Choice name="canary" labelledBy="l-devChannelRepro" value={form.devChannelRepro} options={CANARY.filter((o) => o.value !== "UNKNOWN" || form.devChannelRepro === "UNKNOWN")} onChange={(v) => set("devChannelRepro", v)} />
             </Field>
           )}
-        </section>
-
-        <section class="rsec" aria-labelledby="sec-report">
-          <h2 id="sec-report">The report</h2>
-          <Field id="description" label="Vulnerability description" error={err("description")} hint="Markdown works. Screenshots go in Attachments; MSRC doesn't accept inline images.">
-            <MdArea id="description" value={form.description} rows={10} min={LIMITS.description[0]} max={LIMITS.description[1]} placeholder="What is the bug, where is it, and what can an attacker do with it?" onChange={(v) => set("description", v)} />
+          <Field id="hasCrossTenantImpact" label="Does it affect more than one organization or Entra ID tenant?" labelFor={false}>
+            <Choice name="tenant" labelledBy="l-hasCrossTenantImpact" value={form.hasCrossTenantImpact} options={CROSS_TENANT} onChange={(v) => set("hasCrossTenantImpact", v)} />
           </Field>
-          <Field id="reproductionSteps" label="Steps to reproduce" error={err("reproductionSteps")} hint="Exact enough to reproduce without guessing: setup, steps in order, expected and actual result.">
-            <MdArea id="reproductionSteps" value={form.reproductionSteps} rows={10} max={LIMITS.reproductionSteps[1]} placeholder={"1. …\n2. …"} onChange={(v) => set("reproductionSteps", v)} />
-          </Field>
-          <Field id="callstack" label="Call stack" hint="If it crashes.">
-            <MdArea id="callstack" value={form.callstack} rows={6} mono noPreview onChange={(v) => set("callstack", v)} />
-          </Field>
-        </section>
-
-        <section class="rsec" aria-labelledby="sec-files">
-          <h2 id="sec-files">Attachments</h2>
-          <Attachments api={api} reportNumber={rn} onCount={setFileCount} onPending={setPendingFiles} />
         </section>
 
         <section class="rsec" aria-labelledby="sec-ack">
-          <h2 id="sec-ack">Acknowledgement</h2>
+          <div class="rsec__heading">
+            <span class="rsec__step" aria-hidden="true">03</span>
+            <div><h2 id="sec-ack">Acknowledgement</h2><p>Choose how you and any co-researchers should be credited.</p></div>
+          </div>
           <Field id="acknowledgements" label="How MSRC credits you" labelFor={false} error={err("acknowledgements")} hint="Used if this becomes a CVE. Add co-researchers as contributors.">
             {!form.anonymousSubmission &&
               form.acknowledgements.map((a, i) => (
@@ -485,7 +536,10 @@ export function ReportEditor(p: { id: string | null; cases: { reportNumber: stri
         </section>
 
         <section class="rsec" aria-labelledby="sec-disc">
-          <h2 id="sec-disc">Public disclosure</h2>
+          <div class="rsec__heading">
+            <span class="rsec__step" aria-hidden="true">04</span>
+            <div><h2 id="sec-disc">Public disclosure</h2><p>Tell MSRC if you plan to publish or present this report.</p></div>
+          </div>
           <Field id="disclosures" label="Do you plan to disclose this report publicly?" labelFor={false} error={err("disclosures")} hint="Agree the timing with your MSRC case manager.">
             <YesNo
               name="plans"
@@ -520,7 +574,7 @@ export function ReportEditor(p: { id: string | null; cases: { reportNumber: stri
 
         <details class="rsec rsec--more" open={moreOpen} onToggle={(e) => setMoreOpen((e.currentTarget as HTMLDetailsElement).open)}>
           <summary>
-            <h2>More details</h2>
+            <h2>Additional information</h2>
             <span class="muted small">CWE, CVSS, links, variants, exploitation, tracking ID</span>
           </summary>
           <Field id="cwes" label="CWE" labelFor="in-cwe" error={err("cwes")}>
@@ -550,7 +604,7 @@ export function ReportEditor(p: { id: string | null; cases: { reportNumber: stri
             </div>
           </Field>
           <Field id="cvssVectorString" label="CVSS vector" error={err("cvssVectorString")}>
-            <Text id="in-cvssVectorString" class="is-mono" placeholder="CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:H" value={form.cvssVectorString} onChange={(v) => set("cvssVectorString", v)} />
+            <Text id="in-cvssVectorString" class="is-mono" maxLength={200} placeholder="CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:H" value={form.cvssVectorString} onChange={(v) => set("cvssVectorString", v)} />
           </Field>
           <Field id="links" label="Links" labelFor={false} error={err("links")} hint="Write-ups, references, related issues.">
             {form.links.map((l, i) => (
@@ -563,9 +617,9 @@ export function ReportEditor(p: { id: string | null; cases: { reportNumber: stri
                 </button>
               </div>
             ))}
-            <button type="button" class="link add" onClick={() => set("links", [...form.links, emptyLink()])}>
+            {form.links.length < LIMITS.links && <button type="button" class="link add" onClick={() => set("links", [...form.links, emptyLink()])}>
               Add a link
-            </button>
+            </button>}
           </Field>
           <div class="rf-row">
             <Field id="isPublic" label="Is the issue public?" labelFor={false}>
@@ -575,6 +629,16 @@ export function ReportEditor(p: { id: string | null; cases: { reportNumber: stri
               <YesNo name="exploited" labelledBy="l-isExploited" value={form.isExploited} onChange={(v) => set("isExploited", v)} />
             </Field>
           </div>
+          {form.isExploited && (
+            <>
+              <Field id="isExploitedDiscovery" label="Active exploit discovery" error={err("isExploitedDiscovery")} hint="Where or how was this discovered as an active exploit?">
+                <MdArea id="isExploitedDiscovery" value={form.isExploitedDiscovery} rows={4} max={1000} onChange={(v) => set("isExploitedDiscovery", v)} />
+              </Field>
+              <Field id="isExploitedScale" label="Active exploit scale" error={err("isExploitedScale")} hint="At what scale is it being exploited?">
+                <MdArea id="isExploitedScale" value={form.isExploitedScale} rows={4} max={1000} onChange={(v) => set("isExploitedScale", v)} />
+              </Field>
+            </>
+          )}
           <Field id="isMissedFix" label="Is this a missed fix or a variant of an earlier CVE or case?" labelFor={false}>
             <YesNo name="variant" labelledBy="l-isMissedFix" value={form.isMissedFix} onChange={(v) => set("isMissedFix", v)} />
           </Field>
@@ -595,9 +659,6 @@ export function ReportEditor(p: { id: string | null; cases: { reportNumber: stri
               </Field>
             </div>
           )}
-          <Field id="hasCrossTenantImpact" label="Does it affect more than one organization or Entra ID tenant?" labelFor={false}>
-            <Choice name="tenant" labelledBy="l-hasCrossTenantImpact" value={form.hasCrossTenantImpact} options={CROSS_TENANT} onChange={(v) => set("hasCrossTenantImpact", v)} />
-          </Field>
           <Field id="externalId" label="External tracking ID" hint="Your own reference, for example a ticket in your tracker.">
             <Text id="in-externalId" value={form.externalId} onChange={(v) => set("externalId", v)} />
           </Field>
@@ -642,6 +703,9 @@ export function ReportEditor(p: { id: string | null; cases: { reportNumber: stri
               </li>
             ))}
           </ul>
+          <button type="button" class="btn btn--wide side__preview" onClick={() => setPreviewOpen(true)}>
+            Preview report
+          </button>
           <button
             type="button"
             class="btn btn--go btn--wide"
@@ -667,12 +731,14 @@ export function ReportEditor(p: { id: string | null; cases: { reportNumber: stri
         </div>
       </aside>
 
+      {previewOpen && <ReportPreviewDialog form={form} onClose={() => setPreviewOpen(false)} />}
       {submitOpen && (
         <SubmitDialog
           form={form}
           issues={validate(form, "submit")}
           fileCount={fileCount}
           pendingFiles={pendingFiles}
+          onCheck={checkBeforeSubmit}
           onClose={() => setSubmitOpen(false)}
           onFix={(field) => {
             setSubmitOpen(false);

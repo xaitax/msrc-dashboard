@@ -29,7 +29,14 @@ export function loadLocal(id: string | null): { form: ReportForm; at: number } |
     if (!raw) return null;
     const v = JSON.parse(raw) as { form?: Partial<ReportForm>; at?: unknown };
     if (!v?.form || typeof v.form.title !== "string" || typeof v.at !== "number") return null;
-    return { form: { ...emptyForm(), ...v.form }, at: v.at };
+    // Older local drafts kept these now-editable portal fields in `keep`.
+    const keep = { ...(v.form.keep ?? {}) };
+    const isExploitedDiscovery = v.form.isExploitedDiscovery ?? (typeof keep["isExploitedDiscovery"] === "string" ? keep["isExploitedDiscovery"] : "");
+    const isExploitedScale = v.form.isExploitedScale ?? (typeof keep["isExploitedScale"] === "string" ? keep["isExploitedScale"] : "");
+    const aiConversationId = v.form.aiConversationId ?? (typeof keep["aiConversationId"] === "string" ? keep["aiConversationId"] : "");
+    delete keep["isExploitedDiscovery"];
+    delete keep["isExploitedScale"];
+    return { form: { ...emptyForm(), ...v.form, keep, isExploitedDiscovery, isExploitedScale, aiConversationId }, at: v.at };
   } catch {
     return null;
   }

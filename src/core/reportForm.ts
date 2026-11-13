@@ -42,6 +42,7 @@ export interface ReportForm {
   title: string;
   securityImpact: string;
   aiSafetyImpact: string;
+  aiConversationId: string;
   targets: TargetRow[];
   attackScenario: string;
   devChannelRepro: string;
@@ -54,6 +55,8 @@ export interface ReportForm {
   links: LinkRow[];
   isPublic: boolean | null;
   isExploited: boolean | null;
+  isExploitedDiscovery: string;
+  isExploitedScale: string;
   isMissedFix: boolean | null;
   variantOrRelatedCVE: string;
   variantCaseOrSubmission: string;
@@ -67,7 +70,7 @@ export interface ReportForm {
   keep: Record<string, unknown>;
 }
 
-const KEEP_FIELDS = ["isExploitedDiscovery", "isExploitedScale", "aiConversationId"] as const;
+const KEEP_FIELDS = ["aiConversationId"] as const;
 
 export type ReportInput = Record<string, unknown>;
 
@@ -247,7 +250,7 @@ export const MEDIA: Option[] = [
   { value: "OTHER", label: "Other" },
 ];
 
-export const LIMITS = { description: [50, 10_000], reproductionSteps: [20, 10_000], products: 20, disclosures: 20 } as const;
+export const LIMITS = { description: [50, 10_000], reproductionSteps: [20, 10_000], products: 20, links: 20, disclosures: 20 } as const;
 
 // ---- form <-> payload --------------------------------------------------------
 
@@ -259,6 +262,7 @@ export function emptyForm(): ReportForm {
     title: "",
     securityImpact: "",
     aiSafetyImpact: "",
+    aiConversationId: "",
     targets: [emptyTarget()],
     attackScenario: "",
     devChannelRepro: "",
@@ -271,6 +275,8 @@ export function emptyForm(): ReportForm {
     links: [],
     isPublic: null,
     isExploited: null,
+    isExploitedDiscovery: "",
+    isExploitedScale: "",
     isMissedFix: null,
     variantOrRelatedCVE: "",
     variantCaseOrSubmission: "",
@@ -326,6 +332,7 @@ export function toReportInput(f: ReportForm): ReportInput {
     callstack: nul(f.callstack) === null ? null : f.callstack,
     securityImpact: nul(f.securityImpact),
     aiSafetyImpact: f.securityImpact === "AI_DERIVED_HARM" ? nul(f.aiSafetyImpact) : null,
+    aiConversationId: f.securityImpact === "AI_DERIVED_HARM" || f.targets.some((t) => t.product === "AI") ? nul(f.aiConversationId) : null,
     targetList: f.targets.filter(filled).map((t) => ({
       product: nul(t.product),
       productVersion: nul(t.productVersion),
@@ -343,6 +350,8 @@ export function toReportInput(f: ReportForm): ReportInput {
     externalId: nul(f.externalId),
     isPublic: f.isPublic,
     isExploited: f.isExploited,
+    isExploitedDiscovery: f.isExploited ? nul(f.isExploitedDiscovery) : null,
+    isExploitedScale: f.isExploited ? nul(f.isExploitedScale) : null,
     isMissedFix: f.isMissedFix,
     variantOrRelatedCVE: f.isMissedFix ? nul(f.variantOrRelatedCVE) : null,
     variantCaseOrSubmission: f.isMissedFix ? nul(f.variantCaseOrSubmission) : null,
@@ -371,6 +380,7 @@ export function fromReport(r: Record<string, unknown>): ReportForm {
     title: s(r["title"]),
     securityImpact: s(r["securityImpact"]),
     aiSafetyImpact: s(r["aiSafetyImpact"]),
+    aiConversationId: s(r["aiConversationId"]),
     targets: targets.length ? targets : [emptyTarget()],
     attackScenario: s(r["attackScenario"]),
     devChannelRepro: s(r["devChannelRepro"]),
@@ -383,6 +393,8 @@ export function fromReport(r: Record<string, unknown>): ReportForm {
     links: rows(r["linkList"]).map((l) => ({ title: s(l["title"]), type: s(l["type"]), url: s(l["url"]) })),
     isPublic: bool(r["isPublic"]),
     isExploited: bool(r["isExploited"]),
+    isExploitedDiscovery: s(r["isExploitedDiscovery"]),
+    isExploitedScale: s(r["isExploitedScale"]),
     isMissedFix: bool(r["isMissedFix"]),
     variantOrRelatedCVE: s(r["variantOrRelatedCVE"]),
     variantCaseOrSubmission: s(r["variantCaseOrSubmission"]),
@@ -419,6 +431,7 @@ export function validate(f: ReportForm, mode: "save" | "submit"): Issue[] {
   const len = (v: string) => v.trim().length;
 
   if (!f.title.trim()) add("title", "Add a title.");
+  else if (f.title.length > 200) add("title", "Shorten the title to 200 characters.");
   if (submit && !f.securityImpact) add("securityImpact", "Choose the security impact.");
   if (submit && f.securityImpact === "AI_DERIVED_HARM" && !f.aiSafetyImpact) add("aiSafetyImpact", "Choose the AI harm category.");
   if (f.securityImpact === "AI_DERIVED_HARM" && f.aiSafetyImpact === AI_HARM_CSEAM)
@@ -434,8 +447,14 @@ export function validate(f: ReportForm, mode: "save" | "submit"): Issue[] {
   else if (f.reproductionSteps.length > rMax) add("reproductionSteps", `Shorten the steps to ${rMax.toLocaleString("en")} characters.`);
 
   if (f.cwes.map(normalizeCwe).some((c) => c && !CWE_RE.test(c))) add("cwes", "CWE numbers look like CWE-416.");
+  if (f.cvssVectorString.length > 200) add("cvssVectorString", "Shorten the CVSS vector to 200 characters.");
   if (f.cvssVectorString.trim() && !CVSS_RE.test(f.cvssVectorString.trim())) add("cvssVectorString", "Use a CVSS vector like CVSS:3.1/AV:L/AC:L/…");
+  if (f.isExploited && f.isExploitedDiscovery.length > 1000) add("isExploitedDiscovery", "Shorten exploit discovery details to 1,000 characters.");
+  if (f.isExploited && f.isExploitedScale.length > 1000) add("isExploitedScale", "Shorten exploit scale details to 1,000 characters.");
+  if ((f.securityImpact === "AI_DERIVED_HARM" || f.targets.some((t) => t.product === "AI")) && f.aiConversationId.length > 100)
+    add("aiConversationId", "Shorten the AI conversation ID to 100 characters.");
   if (f.links.filter(linkFilled).some((l) => !URL_RE.test(l.url.trim()) || !l.type)) add("links", "Each link needs a type and an http(s) URL.");
+  if (f.links.filter(linkFilled).length > LIMITS.links) add("links", "MSRC accepts at most 20 links.");
   if (f.isMissedFix && f.variantOrRelatedCVE.trim() && !isCveId(f.variantOrRelatedCVE.trim())) add("variantOrRelatedCVE", "CVE numbers look like CVE-2026-12345.");
   if (f.isMissedFix && (f.variantCaseOrSubmission.trim() ? !isVulnId(f.variantCaseOrSubmission.trim()) : submit))
     add("variantCaseOrSubmission", "Name the existing case as VULN-123456.");

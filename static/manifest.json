@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "MSRC Dashboard",
-  "version": "0.2.2",
-  "description": "Your MSRC Researcher Portal submissions in one place: changes and notifications, reports and messages, export.",
+  "version": "0.3.0",
+  "description": "A researcher workspace for MSRC cases, reports, pre-submit checks, messages, notifications, and export.",
   "minimum_chrome_version": "120",
   "action": {
     "default_title": "MSRC Dashboard",

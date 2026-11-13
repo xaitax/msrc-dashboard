@@ -25,6 +25,8 @@ const REPORT_FIELDS: [string, string][] = [
   ["callstack", "Call stack"],
   ["recommendedSolution", "Recommended solution"],
   ["analysisNotes", "Analysis notes"],
+  ["isExploitedDiscovery", "Active exploit discovery"],
+  ["isExploitedScale", "Active exploit scale"],
   ["acknowledgement", "Acknowledgement"],
 ];
 
@@ -110,6 +112,8 @@ export function CasePanel({ row, view }: { row: CaseRow; view: ViewModel }) {
         <Field label="CVSS">{d["cvssVectorString"] ? val(d["cvssVectorString"]) : row.publicCves[0]?.item.baseScore ? `${row.publicCves[0].item.baseScore} (public advisory)` : "—"}</Field>
         <Field label="CWE">{val(d["cweList"])}</Field>
         <Field label="Products">{products.join(", ") || val(d["target"])}</Field>
+        {d["hasCrossTenantImpact"] != null && <Field label="Cross-tenant impact">{humanizeEnum(String(d["hasCrossTenantImpact"]))}</Field>}
+        {d["devChannelRepro"] != null && <Field label="Windows Insider Canary reproduction">{humanizeEnum(String(d["devChannelRepro"]))}</Field>}
         <Field label="Unread in portal">{val(d["unreadMessageCount"] ?? row.record.list.unreadMessageCount)}</Field>
       </dl>
 
