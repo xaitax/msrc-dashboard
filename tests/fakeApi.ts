@@ -6,7 +6,7 @@ import { listItem } from "./helpers";
 export interface FakeState {
   details: Record<string, Record<string, unknown>>;
   messages: ThreadMessage[]; // any order; served newest first
-  files: Record<string, FileRecord[]>; // by report id (GUID)
+  files: Record<string, FileRecord[]>; // by VULN report number
   failDetailTimes?: number; // next N getReportDetail calls throw (transient 503)
   notifications?: Record<string, unknown>[];
   /** Public Security Update Guide: credit rows and CVE records; failPublic = outage. */
@@ -66,9 +66,9 @@ export function fakeApi(state: FakeState) {
       calls.push(`publicCve:${cve}`);
       return structuredClone(state.publicVulns?.[cve] ?? null);
     },
-    async listFiles(reportId: string): Promise<FileRecord[]> {
-      calls.push(`files:${reportId}`);
-      return structuredClone(state.files[reportId] ?? []);
+    async listFiles(reportNumber: string): Promise<FileRecord[]> {
+      calls.push(`files:${reportNumber}`);
+      return structuredClone(state.files[reportNumber] ?? []);
     },
   };
   return { api, calls };

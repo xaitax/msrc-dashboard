@@ -18,6 +18,8 @@ export interface PublicCve {
   severity: string | null;
   impact: string | null;
   baseScore: string | null;
+  /** Older cached advisories may not contain this field. */
+  temporalScore?: string | null;
   vector: string | null;
   cwe: string[];
   exploitability: string | null;
@@ -73,6 +75,7 @@ export function publicCveFrom(ack: RawObject, vuln: RawObject | null): PublicCve
     severity: str(vuln?.["severity"]),
     impact: str(vuln?.["impact"]) ?? IMPACT_IN_TITLE.exec(title)?.[1] ?? null,
     baseScore: str(vuln?.["baseScore"]),
+    temporalScore: str(vuln?.["temporalScore"]),
     vector: str(vuln?.["vectorString"]),
     cwe: Array.isArray(vuln?.["cweList"]) ? (vuln!["cweList"] as unknown[]).map(str).filter((x): x is string => !!x) : [],
     exploitability: str(vuln?.["latestSoftwareRelease"]),

@@ -2,6 +2,7 @@ import { useEffect, useState } from "preact/hooks";
 import { bannerMarkdown } from "../../core/portalConfig";
 import { statusGuide } from "../../core/statusGuide";
 import type { CaseBanner, ReportApi } from "../reportApi";
+import { CaseIcon } from "./CaseIcon";
 import { Markdown } from "./Markdown";
 
 // MSRC's word on a case: its banner for this case (read live, as the portal
@@ -20,7 +21,7 @@ interface Row {
   statusReason: string | null;
 }
 
-export function CaseGuide({ api, row, onReply }: { api: ReportApi; row: Row; onReply: () => void }) {
+export function CaseGuide({ api, row, onReply, compact }: { api: ReportApi; row: Row; onReply: () => void; compact?: boolean }) {
   const [banners, setBanners] = useState<CaseBanner[]>([]);
 
   useEffect(() => {
@@ -48,10 +49,8 @@ export function CaseGuide({ api, row, onReply }: { api: ReportApi; row: Row; onR
   const guide = statusGuide(row.status, row.statusReason);
   if (!guide && !banners.length) return null;
   const urgent = !!guide?.urgent;
-
-  return (
-    <section class={`guide${urgent ? " guide--urgent" : ""}`} aria-label={urgent ? "Action required" : "Where this case stands"}>
-      {urgent && <p class="guide__flag">Action required</p>}
+  const explanation = (
+    <>
       {banners.map((b) => {
         const tone = b.tone?.toLowerCase();
         return (
@@ -61,6 +60,30 @@ export function CaseGuide({ api, row, onReply }: { api: ReportApi; row: Row; onR
         );
       })}
       {guide && (urgent || !banners.length) && <Markdown class="guide__summary" src={guide.summary} />}
+    </>
+  );
+  if (compact && !urgent) {
+    const noAction = /^No action (required|needed)\./.test(guide?.next ?? "");
+    return (
+      <div class="guide-compact">
+        {noAction
+          ? <p class="guide-compact__next"><CaseIcon name="check" /> No action required</p>
+          : guide?.next && <Markdown class="guide__next" src={guide.next} />}
+        <details class="guide-compact__details">
+          <summary><CaseIcon name="info" /><span>{banners.length ? "MSRC guidance" : "About this status"}</span><CaseIcon name="chevron" /></summary>
+          <div class="guide-compact__body">
+            {explanation}
+            {noAction && guide?.next && <Markdown class="guide__next" src={guide.next} />}
+          </div>
+        </details>
+      </div>
+    );
+  }
+
+  return (
+    <section class={`guide${urgent ? " guide--urgent" : ""}`} aria-label={urgent ? "Action required" : "Where this case stands"}>
+      {urgent && <p class="guide__flag">Action required</p>}
+      {explanation}
       {guide?.next && <Markdown class="guide__next" src={`**${urgent ? "What to do" : "Next"}:** ${guide.next}`} />}
       {urgent && (
         <button type="button" class="btn btn--primary" onClick={onReply}>

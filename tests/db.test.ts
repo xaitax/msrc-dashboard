@@ -1,6 +1,6 @@
 import "fake-indexeddb/auto";
 import { beforeEach, describe, expect, it } from "vitest";
-import { _resetForTests, addEvents, dropPublicCveEvent, getAllCases, getEvents, getMessages, getMeta, markSeen, putCases, putMessages, setMeta } from "../src/store/db";
+import { _resetForTests, addEvents, dropPublicCveEvent, getAllCases, getCaseAnnotations, getEvents, getMessages, getMeta, markSeen, putCases, putMessages, setMeta, updateCaseAnnotation } from "../src/store/db";
 import type { ChangeEvent } from "../src/shared/types";
 import { caseRec, msg } from "./helpers";
 
@@ -13,6 +13,33 @@ beforeEach(async () => {
 });
 
 describe("store", () => {
+  it("adds the private annotation store to an existing version 1 database without losing cases", async () => {
+    const old = await new Promise<IDBDatabase>((resolve, reject) => {
+      const request = indexedDB.open("msrc-dashboard", 1);
+      request.onupgradeneeded = () => {
+        const db = request.result;
+        db.createObjectStore("cases", { keyPath: "reportNumber" });
+        const messages = db.createObjectStore("messages", { keyPath: "id" });
+        messages.createIndex("reportNumber", "reportNumber");
+        const events = db.createObjectStore("events", { keyPath: "key" });
+        events.createIndex("reportNumber", "reportNumber");
+        db.createObjectStore("meta");
+      };
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    await new Promise<void>((resolve, reject) => {
+      const t = old.transaction("cases", "readwrite");
+      t.objectStore("cases").put(caseRec("VULN-1", { status: "NEW" }));
+      t.oncomplete = () => resolve();
+      t.onerror = () => reject(t.error);
+    });
+    old.close();
+    expect((await getAllCases())[0]!.reportNumber).toBe("VULN-1");
+    await updateCaseAnnotation("VULN-1", { tags: ["驱动程序"] });
+    expect((await getCaseAnnotations())[0]!.tags).toEqual(["驱动程序"]);
+  });
+
   it("inserts events once and returns only new ones", async () => {
     expect(await addEvents([ev("a", "VULN-1"), ev("b", "VULN-1")])).toHaveLength(2);
     expect(await addEvents([ev("a", "VULN-1"), ev("c", "VULN-2")])).toEqual([ev("c", "VULN-2")]);
@@ -48,6 +75,17 @@ describe("store", () => {
     await setMeta("lastSyncAt", 123);
     expect(await getMeta<number>("lastSyncAt")).toBe(123);
     expect(await getMeta("missing")).toBeUndefined();
+  });
+
+  it("keeps private notes and tags separate from portal records", async () => {
+    await putCases([caseRec("VULN-1", { status: "NEW" })]);
+    await updateCaseAnnotation("VULN-1", { note: "Remember: 🔐 服务" });
+    await updateCaseAnnotation("VULN-1", { tags: ["WPR", "驱动程序"] });
+    expect(await getCaseAnnotations()).toEqual([{ reportNumber: "VULN-1", note: "Remember: 🔐 服务", tags: ["WPR", "驱动程序"] }]);
+    expect((await getAllCases())[0]!.detail?.["note"]).toBeUndefined();
+    await updateCaseAnnotation("VULN-1", { note: "" });
+    await updateCaseAnnotation("VULN-1", { tags: [] });
+    expect(await getCaseAnnotations()).toEqual([]);
   });
 });
 

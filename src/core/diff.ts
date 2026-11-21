@@ -20,9 +20,6 @@ export const IGNORED_FIELDS: ReadonlySet<string> = new Set([
   "raw",
 ]);
 
-/** Changes the researcher made themselves: recorded, but pre-seen and silent. */
-const OWN_FIELDS: ReadonlySet<string> = new Set(["isFlagged"]);
-
 const SPECIAL: ReadonlySet<string> = new Set(["status", "statusReason", "bounty", "disclosureEventList"]);
 
 type Draft = Omit<ChangeEvent, "key" | "detectedAt" | "seen" | "own" | "occurredAt"> & {
@@ -81,6 +78,20 @@ function changeLogTime(detail: Record<string, unknown> | null, field: string, ne
 function fieldLabel(field: string): string {
   const words = field.replace(/([a-z0-9])([A-Z])/g, "$1 $2").toLowerCase();
   return words.charAt(0).toUpperCase() + words.slice(1);
+}
+
+/** The portal uses isFlagged to indicate that a report contains a flagged message. */
+function flagSummary(value: unknown): string {
+  return value === true
+    ? "This report contains a flagged message"
+    : value === false
+      ? "This report no longer contains a flagged message"
+      : "Flagged message indicator changed";
+}
+
+/** Correct the wording and attribution of events stored by older versions. */
+export function normalizeFlagEvent(e: ChangeEvent): ChangeEvent {
+  return e.field === "isFlagged" ? { ...e, summary: flagSummary(e.newValue), own: false } : e;
 }
 
 function short(v: unknown): string | null {
@@ -170,9 +181,8 @@ export function diffCase(
       field: k,
       oldValue: a[k] ?? null,
       newValue: b[k] ?? null,
-      summary: o !== null && n !== null ? `${fieldLabel(k)}: ${o} → ${n}` : `${fieldLabel(k)} changed`,
+      summary: k === "isFlagged" ? flagSummary(b[k]) : o !== null && n !== null ? `${fieldLabel(k)}: ${o} → ${n}` : `${fieldLabel(k)} changed`,
       occurredAt: changeLogTime(detail, k, b[k]),
-      own: OWN_FIELDS.has(k),
       gen,
     });
   }

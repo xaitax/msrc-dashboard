@@ -1,14 +1,15 @@
 // View model for the dashboard: pure derivation from the store's contents.
 import { awardSummary, type AwardSummary } from "../core/awards";
 import { caseClock, type CaseClock } from "../core/caseClock";
+import { normalizeFlagEvent } from "../core/diff";
 import { extractCves, msrcNamedCves } from "../core/cve";
 import { resolvePublicCves, type CveLinks, type PublicCve, type PublicMeta } from "../core/publicCves";
 import { caseStatus, caseStatusReason, caseTitle, isClosed, isUnseen, MSRC_SENDER, PIPELINE } from "../core/derive";
 import { needsAction } from "../core/statusGuide";
 import type { StatusHistory } from "../core/history";
 import { send, type AppState } from "../shared/protocol";
-import type { CaseRecord, ChangeEvent, DraftRef, ThreadMessage, VulnId } from "../shared/types";
-import { getAllCases, getEvents, getMessages, getMeta, META } from "../store/db";
+import type { CaseAnnotation, CaseRecord, ChangeEvent, DraftRef, ThreadMessage, VulnId } from "../shared/types";
+import { getAllCases, getCaseAnnotations, getEvents, getMessages, getMeta, META } from "../store/db";
 import { dayLabel } from "./format";
 
 
@@ -38,6 +39,8 @@ export interface CaseRow {
   lastChange: ChangeEvent | null;
   lastChangeAt: string | null;
   cves: string[];
+  /** IDs MSRC named on this case or the researcher explicitly linked. */
+  advisoryCves: string[];
   unseen: boolean;
   closed: boolean;
   points: number;
@@ -46,6 +49,7 @@ export interface CaseRow {
   /** The case's day against the 90-day mark, and MSRC's silence on it. */
   clock: CaseClock;
   record: CaseRecord;
+  annotation: CaseAnnotation;
 }
 
 export type FeedItem = ChangeEvent & { count: number };
@@ -67,6 +71,7 @@ export interface ViewModel {
   awards: AwardSummary;
   history: StatusHistory;
   rows: CaseRow[];
+  annotations: CaseAnnotation[];
   state: AppState;
   messages: ThreadMessage[];
   events: ChangeEvent[];
@@ -136,13 +141,19 @@ export function buildView(
   drafts: DraftRef[] = [],
   pub: { publicCves?: PublicCve[]; cveLinks?: CveLinks } = {},
   now: Date = new Date(),
+  annotations: CaseAnnotation[] = [],
 ): ViewModel {
+  // Older versions labelled this as a researcher action and stored raw API wording.
+  events = events.map(normalizeFlagEvent);
   const eventsByCase = new Map<VulnId, ChangeEvent[]>();
   for (const e of [...events].sort(newestFirst)) eventsByCase.set(e.reportNumber, [...(eventsByCase.get(e.reportNumber) ?? []), e]);
   const msgsByCase = new Map<VulnId, ThreadMessage[]>();
   for (const m of msgs) msgsByCase.set(m.reportNumber, [...(msgsByCase.get(m.reportNumber) ?? []), m]);
   const cves = extractCves(msgs);
-  const publicCves = resolvePublicCves(cases, pub.publicCves ?? [], pub.cveLinks ?? {}, msrcNamedCves(cves));
+  const namedCves = msrcNamedCves(cves);
+  const links = pub.cveLinks ?? {};
+  const publicCves = resolvePublicCves(cases, pub.publicCves ?? [], links, namedCves);
+  const annotationsByCase = new Map(annotations.map((a) => [a.reportNumber, a]));
 
   const rows: CaseRow[] = cases.map((c) => {
     const evs = eventsByCase.get(c.reportNumber) ?? [];
@@ -155,6 +166,8 @@ export function buildView(
     const closed = isClosed(status) || status === "CLOSED";
     const caseMsgs = msgsByCase.get(c.reportNumber) ?? [];
     const casePublic = publicCves.byCase[c.reportNumber] ?? [];
+    const advisoryCves = new Set((namedCves[c.reportNumber] ?? []).filter((id) => !Object.hasOwn(links, id)));
+    for (const [id, rn] of Object.entries(links)) if (rn === c.reportNumber) advisoryCves.add(id);
     const clock = caseClock(
       {
         submittedAt: c.list.createdOn,
@@ -178,13 +191,15 @@ export function buildView(
       prevStage: prevStatus ? stageOf(prevStatus) : undefined,
       lastChange,
       lastChangeAt: lastChange?.occurredAt ?? c.list.lastActivityOn,
-      cves: Array.from(new Set([...(cves[c.reportNumber] ?? []).map((r) => r.cve), ...(publicCves.byCase[c.reportNumber] ?? []).map((x) => x.item.cve)])),
+      cves: Array.from(new Set([...(cves[c.reportNumber] ?? []).map((r) => r.cve), ...advisoryCves])),
+      advisoryCves: [...advisoryCves],
       publicCves: casePublic,
       clock,
       unseen: unseen.length > 0,
       closed: isClosed(status),
       points: pointsOf(c),
       record: c,
+      annotation: annotationsByCase.get(c.reportNumber) ?? { reportNumber: c.reportNumber, note: "", tags: [] },
     };
   });
   rows.sort(byRecency);
@@ -192,7 +207,7 @@ export function buildView(
 
 
   const byEdit = (d: DraftRef) => Date.parse(d.lastActivityOn ?? d.createdOn ?? "0") || 0;
-  return { rows, state, unseen: events.filter(isUnseen).length, messages: msgs, events, points: pointsSummary(rows), awards: awardSummary(cases), publicUnlinked: publicCves.unlinked, publicDismissed: publicCves.dismissed, history, drafts: [...drafts].sort((a, b) => byEdit(b) - byEdit(a)) };
+  return { rows, annotations, state, unseen: events.filter(isUnseen).length, messages: msgs, events, points: pointsSummary(rows), awards: awardSummary(cases), publicUnlinked: publicCves.unlinked, publicDismissed: publicCves.dismissed, history, drafts: [...drafts].sort((a, b) => byEdit(b) - byEdit(a)) };
 }
 
 /** The panel keeps showing as "new" what was unseen when the case was opened,
@@ -204,7 +219,7 @@ export function pinUnseen(events: ChangeEvent[], pinned: ReadonlySet<string>): C
 const EMPTY_STATE: AppState = { auth: "signed_out", lastSyncAt: null, lastError: null, syncing: false, baselineDone: false, progress: null, sessionExpiresAt: null, sessionStartedAt: null, lastSessionLengthMs: null };
 
 export async function loadView(): Promise<ViewModel> {
-  const [cases, msgs, events, history, drafts, publicMeta, cveLinks, state] = await Promise.all([
+  const [cases, msgs, events, history, drafts, publicMeta, cveLinks, annotations, state] = await Promise.all([
     getAllCases(),
     getMessages(),
     getEvents(),
@@ -212,7 +227,8 @@ export async function loadView(): Promise<ViewModel> {
     getMeta<DraftRef[]>(META.drafts),
     getMeta<PublicMeta>(META.publicCves),
     getMeta<CveLinks>(META.cveLinks),
+    getCaseAnnotations(),
     send<AppState>({ type: "state:get" }),
   ]);
-  return buildView(cases, msgs, events, state ?? EMPTY_STATE, history ?? {}, drafts ?? [], { publicCves: publicMeta?.items ?? [], cveLinks: cveLinks ?? {} });
+  return buildView(cases, msgs, events, state ?? EMPTY_STATE, history ?? {}, drafts ?? [], { publicCves: publicMeta?.items ?? [], cveLinks: cveLinks ?? {} }, new Date(), annotations);
 }

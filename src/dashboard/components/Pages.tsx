@@ -18,7 +18,7 @@ const ACT: [ActFilter, string, (e: ChangeEvent) => boolean][] = [
   ["yours", "Your replies & uploads", (e) => e.own],
 ];
 
-export function ActivityPage({ view, onOpen, onMarkSeen }: { view: ViewModel; onOpen: (rn: string) => void; onMarkSeen: () => void }) {
+export function ActivityPage({ view, onOpen, onMarkSeen, onClearPortal, clearingPortalRead }: { view: ViewModel; onOpen: (rn: string) => void; onMarkSeen: () => void; onClearPortal: () => void; clearingPortalRead: boolean }) {
   const [f, setF] = useState<ActFilter>("all");
   const titleOf = useMemo(() => new Map(view.rows.map((r) => [r.reportNumber, r.title])), [view]);
   const pred = ACT.find(([k]) => k === f)![2];
@@ -36,11 +36,10 @@ export function ActivityPage({ view, onOpen, onMarkSeen }: { view: ViewModel; on
             </button>
           ))}
           <span class="top__grow" />
-          {unseen > 0 && (
-            <button class="btn" onClick={onMarkSeen}>
-              Mark all seen
-            </button>
-          )}
+          {unseen > 0 && <button type="button" class="btn" onClick={onMarkSeen}>Mark all seen</button>}
+          <button type="button" class="btn" onClick={onClearPortal} disabled={clearingPortalRead || view.state.auth !== "ok"}>
+            {clearingPortalRead ? "Marking read…" : "Clear MSRC bell"}
+          </button>
         </div>
       </header>
       <div class="act">
@@ -438,6 +437,15 @@ export function ProfilePage() {
         <a href="#internals">Portal internals</a>
         <span class="muted">: what the portal publishes about itself, from its AI pre-screening to its test environments.</span>
       </p>
+      <section class="profile-about" aria-labelledby="profile-about-title">
+        <h2 id="profile-about-title">About MSRC Dashboard</h2>
+        <p>
+          Version {chrome.runtime.getManifest().version} · Made by{" "}
+          <a href="https://github.com/xaitax" target="_blank" rel="noopener noreferrer">Alex Hagenah (@xaitax)</a>
+        </p>
+        <p class="muted">An independent project, unaffiliated with Microsoft or MSRC.</p>
+        <a href="https://github.com/xaitax/msrc-dashboard" target="_blank" rel="noopener noreferrer">MSRC Dashboard on GitHub</a>
+      </section>
     </main>
   );
 }

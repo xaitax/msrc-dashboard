@@ -17,10 +17,12 @@ import {
   VALIDATE_QUALITY_GATES_MUTATION,
 } from "../background/queries";
 import { attachFieldName, encryptForMsrc, type MsrcJwk } from "../core/attachCrypto";
+import { normalizeMessage } from "../background/api";
 import { MEDIA, type ReportInput } from "../core/reportForm";
 import { isGuid, isVulnId } from "../shared/ids";
 import { API_ROOT, GRAPHQL_URL } from "../shared/urls";
 import { errorText } from "../shared/protocol";
+import type { RawObject, ThreadMessage } from "../shared/types";
 
 const API = API_ROOT;
 const GRAPHQL = GRAPHQL_URL;
@@ -173,7 +175,78 @@ export function createReportApi(d: ReportApiDeps) {
     return key;
   }
 
+  async function listRows(path: string, filter: string, what: string): Promise<RawObject[]> {
+    const rows: RawObject[] = [];
+    const size = 100;
+    for (let skip = 0; skip < 2000; skip += size) {
+      const params = new URLSearchParams({ "$filter": filter, "$orderBy": "createdOn desc", "$top": String(size), "$skip": String(skip) });
+      const resp = await call(`${API}${path}?${params}`, { signal: AbortSignal.timeout(SEND_TIMEOUT_MS) }, what);
+      const data = (await resp.json()) as { value?: RawObject[] };
+      if (!Array.isArray(data.value)) throw new WriteError(`${what}: MSRC returned an invalid list.`);
+      rows.push(...data.value);
+      if (data.value.length < size) return rows;
+    }
+    throw new WriteError(`${what}: too many results.`);
+  }
+
   return {
+    /** MSRC's list can include a message even when the row's isFlagged is false. */
+    async flaggedMessages(reportNumber: string): Promise<ThreadMessage[]> {
+      const rn = vuln(reportNumber);
+      const rows = await listRows("/message", `reportNumber eq '${rn}' and conversationId eq null and isFlagged eq true`, "load flagged messages");
+      return rows.flatMap((row) => {
+        const message = normalizeMessage(row);
+        return message?.reportNumber === rn ? [message] : [];
+      });
+    },
+
+    async unflagMessage(messageId: string): Promise<void> {
+      if (!isGuid(messageId)) throw new WriteError("Invalid MSRC message ID.");
+      await call(
+        `${API}/message/MessageService.Unflag`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ messageIds: [messageId] }),
+          signal: AbortSignal.timeout(SEND_TIMEOUT_MS),
+        },
+        "unflag message",
+      );
+    },
+
+    /** The portal bell only shows unread notification rows. Its Clear action
+     * posts their IDs, independently of message.read and our local seen flags.
+     * A case opened here clears only notices older than the last completed sync,
+     * so a newer, not-yet-loaded update cannot disappear from the portal. */
+    async markPortalNotificationsRead(reportNumber?: string, syncedThrough?: number): Promise<number> {
+      const rn = reportNumber === undefined ? undefined : vuln(reportNumber);
+      const path = "/portal/v2.0/notification";
+      const filter = rn ? `read eq false and reportNumber eq '${rn}'` : "read eq false";
+      const rows = await listRows(path, filter, "load unread MSRC notifications");
+      const ids = new Set<string>();
+      const pageSize = 100;
+      for (const row of rows) {
+        const id = row["id"];
+        const report = row["reportNumber"];
+        if (typeof id !== "string" || !id || !isVulnId(report) || row["read"] !== false) continue;
+        if (rn && report !== rn) continue;
+        if (syncedThrough !== undefined) {
+          const created = typeof row["createdOn"] === "string" ? Date.parse(row["createdOn"]) : NaN;
+          if (!Number.isFinite(created) || created >= syncedThrough) continue;
+        }
+        ids.add(id);
+      }
+      const selected = [...ids];
+      for (let i = 0; i < selected.length; i += pageSize) {
+        await call(
+          `${API}${path}/NotificationService.MarkAsRead`,
+          { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ notificationIds: selected.slice(i, i + pageSize) }), signal: AbortSignal.timeout(SEND_TIMEOUT_MS) },
+          "mark MSRC notifications read",
+        );
+      }
+      return selected.length;
+    },
+
     /** Irreversible: a new message on the case, exactly what the portal's
      *  "Type a new message" box sends. No conversation id is involved. */
     async sendMessage(reportNumber: string, text: string, topic?: MessageTopic | null): Promise<void> {

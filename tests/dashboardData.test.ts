@@ -50,6 +50,15 @@ describe("buildView", () => {
     expect(v.rows.find((r) => r.reportNumber === "VULN-3")!).toMatchObject({ closed: true, cves: ["CVE-2026-55555"] });
   });
 
+  it("corrects old flagged-message entries without making already-seen activity new", () => {
+    const old = ev("VULN-1", "field_changed", "2026-11-11T11:01:00", {
+      field: "isFlagged", newValue: true, summary: "Is flagged: false → true", own: true, seen: true,
+    });
+    const view = buildView(cases, messages, [old], STATE);
+    expect(view.events[0]).toMatchObject({ summary: "This report contains a flagged message", own: false, seen: true });
+    expect(view.unseen).toBe(0);
+  });
+
   it("flags the cases where MSRC waits for the researcher", () => {
     const waiting = caseRec("VULN-4", { status: "REVIEW_REPRO", statusReason: "ADDITIONAL_INFORMATION_NEEDED" }, { list: { status: "REVIEW_REPRO", statusReason: "ADDITIONAL_INFORMATION_NEEDED" } });
     const listOnly = caseRec("VULN-5", null, { list: { status: "NEW", statusReason: "ADDITIONAL_INFORMATION_NEEDED" } });
@@ -207,5 +216,13 @@ describe("public CVEs: what counts as MSRC's link", () => {
     const fixed = msg({ reportNumber: "VULN-1", createdOn: "2026-11-13T00:00:00Z", body: "The fix was released as CVE-2026-1001." });
     const v = buildView(cases, [fixed], [], STATE, {}, [], { publicCves: [item], cveLinks: {} });
     expect(v.rows[0]!.publicCves).toEqual([{ item, by: "msrc" }]);
+  });
+
+  it("makes named and manually linked advisories available before the credits scan finds a record", () => {
+    const fixed = msg({ reportNumber: "VULN-1", createdOn: "2026-11-13T00:00:00Z", body: "The fix was released as CVE-2026-1001." });
+    const links = { "CVE-2026-1002": "VULN-1" } as const;
+    const v = buildView(cases, [fixed], [], STATE, {}, [], { publicCves: [], cveLinks: links });
+    expect(v.rows[0]!.advisoryCves).toEqual(["CVE-2026-1001", "CVE-2026-1002"]);
+    expect(v.rows[0]!.publicCves).toEqual([]);
   });
 });

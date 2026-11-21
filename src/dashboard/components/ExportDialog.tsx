@@ -48,7 +48,7 @@ export function ExportDialog({ view, onClose }: { view: ViewModel; onClose: () =
   return (
     <dialog ref={ref} class="dialog" onClose={onClose} aria-labelledby="export-title">
       <h2 id="export-title">Export submissions</h2>
-      <p class="dialog__lead">One JSON file with every detail: report text, all messages, status changes, file names and the raw API data, ready to hand to an AI to update your case folders.</p>
+      <p class="dialog__lead">One JSON file with the portal data: report text, messages, status changes, file names and raw API responses, ready to use with your case folders. Private notes and tags are excluded.</p>
       <div class="pick__head">
         <span>
           {picked.size} of {view.rows.length} cases

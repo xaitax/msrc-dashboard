@@ -2,7 +2,7 @@
 // minted by auth.ts; the DNR rule rewrites Origin so the API accepts them.
 // The service worker only reads. Report writes (drafts, attachments, submit)
 // run in the dashboard page via src/dashboard/reportApi.ts.
-import { isCveId, isGuid, isVulnId } from "../shared/ids";
+import { isCveId, isVulnId } from "../shared/ids";
 import type { FileRecord, RawObject, ReportDetail, ReportListItem, ThreadMessage, VulnId } from "../shared/types";
 import { getAccessToken, invalidateAccessToken } from "./auth";
 import { DETAIL_QUERY, LIST_QUERY } from "./queries";
@@ -18,11 +18,21 @@ const SUG_MAX_PAGES = 20;
 const SUG_TIMEOUT_MS = 20_000;
 
 async function publicGet(url: string, what: string): Promise<unknown> {
-  const r = await fetch(url, { headers: { Accept: "application/json" }, signal: AbortSignal.timeout(SUG_TIMEOUT_MS) });
+  const r = await fetch(url, { credentials: "omit", headers: { Accept: "application/json" }, signal: AbortSignal.timeout(SUG_TIMEOUT_MS) });
   if (!r.ok) throw new ApiError(r.status, what);
   return r.json();
 }
+
+export async function fetchPublicCve(cve: string): Promise<RawObject | null> {
+  if (!isCveId(cve)) return null;
+  const filter = encodeURIComponent(`cveNumber eq '${cve}'`);
+  const data = (await publicGet(`${SUG}/en-US/vulnerability?$filter=${filter}`, `public ${cve}`)) as { value?: RawObject[] };
+  if (!Array.isArray(data.value)) throw new Error(`Invalid public advisory response for ${cve}`);
+  return data.value.find((record) => record?.["cveNumber"] === cve) ?? null;
+}
 const LIST_PAGE = 50;
+const FILE_PAGE = 50;
+const FILE_MAX_PAGES = 20;
 
 export class ApiError extends Error {
   constructor(
@@ -147,12 +157,30 @@ export const msrcApi: SyncApi = {
     return out;
   },
 
-  async listFiles(reportId: string) {
-    if (!isGuid(reportId)) return [];
-    // Live-verified: files are keyed by objectId (the report GUID), not reportId.
-    const filter = encodeURIComponent(`objectId eq '${reportId}'`);
-    const d = (await apiFetch(`${API_ROOT}/portal/v2.0/file?$filter=${filter}&$orderBy=createdOn%20desc`, {}, "files")) as { value?: RawObject[] };
-    return (d.value ?? []).map(normalizeFile).filter((f): f is FileRecord => f !== null);
+  async listFiles(reportNumber: VulnId) {
+    if (!isVulnId(reportNumber)) return [];
+    // The portal's Activity feed queries reportId. objectId finds the files
+    // attached at submission but misses later uploads on the same report.
+    const path = `${API_ROOT}/portal/v2.0/file`;
+    let url: string | null = `${path}?$filter=${encodeURIComponent(`reportId eq '${reportNumber}'`)}&$orderBy=createdOn%20desc&$top=${FILE_PAGE}`;
+    const seenPages = new Set<string>();
+    const files = new Map<string, FileRecord>();
+    for (let page = 0; url && page < FILE_MAX_PAGES; page++) {
+      if (seenPages.has(url)) throw new Error(`files ${reportNumber}: pagination loop`);
+      seenPages.add(url);
+      const d = (await apiFetch(url, {}, `files ${reportNumber}`)) as { value?: RawObject[]; "@odata.nextLink"?: unknown };
+      for (const raw of d.value ?? []) {
+        if (raw["reportId"] !== reportNumber) continue;
+        const file = normalizeFile(raw);
+        if (file) files.set(file.id, file);
+      }
+      const next = d["@odata.nextLink"];
+      if (typeof next !== "string" || !next) return [...files.values()];
+      const parsed = new URL(next, path);
+      if (parsed.origin !== new URL(path).origin || parsed.pathname !== "/portal/v2.0/file") throw new Error(`files ${reportNumber}: invalid pagination URL`);
+      url = parsed.href;
+    }
+    throw new Error(`files ${reportNumber}: too many pages`);
   },
 
   /** Every public CVE credit since `sinceIso` (all researchers; filtered locally). */
@@ -169,9 +197,5 @@ export const msrcApi: SyncApi = {
     return out;
   },
 
-  async publicCve(cve: string) {
-    if (!isCveId(cve)) return null;
-    const d = (await publicGet(`${SUG}/en-US/vulnerability?$filter=${encodeURIComponent(`cveNumber eq '${cve}'`)}`, `public ${cve}`)) as { value?: RawObject[] };
-    return d.value?.[0] ?? null;
-  },
+  publicCve: fetchPublicCve,
 };

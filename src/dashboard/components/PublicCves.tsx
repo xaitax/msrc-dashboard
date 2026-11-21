@@ -137,7 +137,6 @@ export function PublicCveFacts({ entries, otherCves }: { entries: { item: Public
           <span class="muted">
             {" "}
             published {releaseDay(item.releaseDate)}
-            {cveFacts(item) ? `, ${cveFacts(item)}` : ""}
           </span>
           {by === "you" && (
             <button type="button" class="link pubfact__undo" onClick={() => link(item.cve, undefined)}>

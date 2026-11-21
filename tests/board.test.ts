@@ -16,26 +16,36 @@ const ev = (rn: string, at: string, p: Partial<ChangeEvent> = {}): ChangeEvent =
 describe("sinceStrip", () => {
   it("shows one card per case with the newest change and how many more it has", () => {
     const s = sinceStrip([ev("VULN-1", "2026-11-11T09:00"), ev("VULN-1", "2026-11-11T10:00", { summary: "newest" }), ev("VULN-2", "2026-11-10T09:00")], 4);
-    expect(s.mode).toBe("new");
     expect(s.cards.map((c) => [c.reportNumber, c.latest.summary, c.count])).toEqual([
       ["VULN-1", "newest", 2],
       ["VULN-2", "s3", 1],
     ]);
-    expect(s.more).toBe(0);
+    expect(s.unseenCases).toBe(2);
     expect(s.total).toBe(3);
   });
   it("caps the strip and reports the overflow as more cases", () => {
     const evs = [1, 2, 3, 4, 5, 6, 7].map((i) => ev(`VULN-${i}`, `2026-11-0${i}T09:00`));
-    const s = sinceStrip(evs, 4);
-    expect(s.cards).toHaveLength(4);
+    const s = sinceStrip(evs);
+    expect(s.cards).toHaveLength(3);
     expect(s.cards[0]!.reportNumber).toBe("VULN-7");
-    expect(s.more).toBe(3);
+    expect(s.unseenCases).toBe(7);
   });
-  it("falls back to the latest changes, marked as such, when nothing is new", () => {
+  it("keeps recent history visible when all changes have been seen", () => {
     const s = sinceStrip([ev("VULN-1", "2026-11-01T09:00", { seen: true }), ev("VULN-2", "2026-11-02T09:00", { seen: true }), ev("VULN-3", "2026-11-03T09:00", { own: true, seen: true, type: "own_message" })], 4);
-    expect(s.mode).toBe("latest");
     expect(s.cards.map((c) => c.reportNumber)).toEqual(["VULN-3", "VULN-2", "VULN-1"]);
-    expect(s.total).toBe(0);
+    expect(s).toMatchObject({ unseenCases: 0, total: 0 });
+  });
+  it("fills spare preview slots with history from other cases", () => {
+    const s = sinceStrip([
+      ev("VULN-1", "2026-11-01T09:00"),
+      ev("VULN-1", "2026-11-02T09:00", { seen: true }),
+      ev("VULN-2", "2026-11-03T09:00", { seen: true }),
+    ]);
+    expect(s.cards.map((c) => [c.reportNumber, c.latest.seen, c.count])).toEqual([
+      ["VULN-1", false, 1],
+      ["VULN-2", true, 1],
+    ]);
+    expect(s).toMatchObject({ unseenCases: 1, total: 1 });
   });
 });
 
@@ -59,6 +69,16 @@ describe("boardColumns", () => {
       ["prerelease", []],
     ]);
     expect(b.closed.map((r) => r.reportNumber)).toEqual(["VULN-4"]);
+  });
+
+  it("sorts cases by their first Unicode tag, with untagged cases last", () => {
+    const tagged = buildView(cases, messages, [], STATE, {}, [], {}, new Date(), [
+      { reportNumber: "VULN-1", note: "", tags: ["Zeta Service"] },
+      { reportNumber: "VULN-2", note: "", tags: ["Áudio"] },
+    ]);
+    const sorted = boardColumns(tagged.rows, "tag");
+    expect(sorted.columns.find((c) => c.key === "develop")!.rows.map((r) => r.reportNumber)).toEqual(["VULN-2", "VULN-1"]);
+    expect(sorted.closed[0]!.annotation.tags).toEqual([]);
   });
 });
 

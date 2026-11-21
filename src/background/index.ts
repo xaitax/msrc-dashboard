@@ -97,6 +97,7 @@ async function appState(): Promise<AppState> {
   return {
     auth: await getAuthState(),
     lastSyncAt: (await getMeta<number>(META.lastSyncAt)) ?? null,
+    lastSyncStartedAt: (await getMeta<number>(META.lastSyncStartedAt)) ?? null,
     lastError: (await getMeta<string | null>(META.lastError)) ?? null,
     syncing,
     baselineDone: (await getMeta<boolean>(META.baselineDone)) === true,

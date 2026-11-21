@@ -12,6 +12,7 @@ export interface SyncProgress {
 export interface AppState {
   auth: AuthState;
   lastSyncAt: number | null;
+  lastSyncStartedAt?: number | null;
   lastError: string | null;
   syncing: boolean;
   baselineDone: boolean;

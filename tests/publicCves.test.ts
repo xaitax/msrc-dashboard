@@ -20,6 +20,7 @@ const EXAMPLE_CVE: PublicCve = {
   severity: "Important",
   impact: "Elevation of Privilege",
   baseScore: "7.0",
+  temporalScore: "6.1",
   vector: "CVSS:3.1/AV:L/AC:H/PR:L/UI:N/S:U/C:H/I:H/A:H/E:U/RL:O/RC:C",
   cwe: ["CWE-416: Use After Free"],
   exploitability: "Exploitation More Likely",
@@ -44,10 +45,10 @@ describe("whose credit is it", () => {
 describe("normalising the guide's entries", () => {
   it("prefers the vulnerability record and falls back to the acknowledgement row", () => {
     const ack = { cveNumber: "CVE-2026-1001", cveTitle: "Windows Example Elevation of Privilege Vulnerability", releaseDate: "2026-11-10T08:00:00-08:00", ackText: "x" };
-    const vuln = { cveNumber: "CVE-2026-1001", cveTitle: "Windows Example Elevation of Privilege Vulnerability", releaseDate: "2026-11-10T08:00:00-08:00", severity: "Important", impact: "Elevation of Privilege", baseScore: "7.0", vectorString: EXAMPLE_CVE.vector, cweList: ["CWE-416: Use After Free"], latestSoftwareRelease: "Exploitation More Likely" };
+    const vuln = { cveNumber: "CVE-2026-1001", cveTitle: "Windows Example Elevation of Privilege Vulnerability", releaseDate: "2026-11-10T08:00:00-08:00", severity: "Important", impact: "Elevation of Privilege", baseScore: "7.0", temporalScore: "6.1", vectorString: EXAMPLE_CVE.vector, cweList: ["CWE-416: Use After Free"], latestSoftwareRelease: "Exploitation More Likely" };
     expect(publicCveFrom(ack, vuln)).toEqual(EXAMPLE_CVE);
     // Without the record: impact from the title, nothing invented.
-    expect(publicCveFrom(ack, null)).toEqual({ cve: EXAMPLE_CVE.cve, title: EXAMPLE_CVE.title, releaseDate: EXAMPLE_CVE.releaseDate, severity: null, impact: "Elevation of Privilege", baseScore: null, vector: null, cwe: [], exploitability: null });
+    expect(publicCveFrom(ack, null)).toEqual({ cve: EXAMPLE_CVE.cve, title: EXAMPLE_CVE.title, releaseDate: EXAMPLE_CVE.releaseDate, severity: null, impact: "Elevation of Privilege", baseScore: null, temporalScore: null, vector: null, cwe: [], exploitability: null });
     expect(publicCveFrom({ ...ack, cveNumber: "CVE-2026-1' or 1" }, null)).toBeNull();
   });
 });

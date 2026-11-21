@@ -21,7 +21,7 @@ function world(): FakeState {
       msg({ id: "m2", reportNumber: "VULN-1", createdOn: "2026-11-01T00:00:00Z", senderName: "MSRC" }),
       msg({ id: "m3", reportNumber: "VULN-2", createdOn: "2026-10-03T00:00:00Z", senderName: "Researcher" }),
     ],
-    files: { [G1]: [file("f1", "poc.zip", "2026-08-24T20:01:00Z")] },
+    files: { "VULN-1": [file("f1", "poc.zip", "2026-08-24T20:01:00Z")] },
   };
 }
 
@@ -57,7 +57,7 @@ describe("sync engine", () => {
     const { sync, calls, state } = await baselined();
     state.messages.push(msg({ id: "m4", reportNumber: "VULN-2", createdOn: "2026-11-11T10:05:00Z", senderName: "MSRC" }));
     const ev = await sync.runPoll();
-    expect(calls).toEqual(["list", "messages:0", "detail:VULN-2", `files:${G2}`]);
+    expect(calls).toEqual(["list", "messages:0", "detail:VULN-2", "files:VULN-2"]);
     expect(ev.map((e) => [e.type, e.reportNumber, e.seen])).toEqual([["msrc_message", "VULN-2", false]]);
   });
 
@@ -90,7 +90,7 @@ describe("sync engine", () => {
   it("treats files uploaded alongside the researcher's own message as own", async () => {
     const { sync, state } = await baselined();
     state.messages.push(msg({ id: "m5", reportNumber: "VULN-1", createdOn: "2026-11-11T11:00:00Z", senderName: "Researcher" }));
-    state.files[G1]!.push(file("f2", "trace.etl", "2026-11-11T11:02:00Z"));
+    state.files["VULN-1"]!.push(file("f2", "trace.etl", "2026-11-11T11:02:00Z"));
     const ev = await sync.runPoll();
     expect(ev.map((e) => [e.type, e.own, e.seen]).sort()).toEqual([
       ["file_added", true, true],
@@ -118,7 +118,7 @@ describe("own uploads ignore createdBy (live: always the upload service account)
     const { sync, state } = await baselined();
     state.messages.push(msg({ id: "m7", reportNumber: "VULN-1", createdOn: "2026-11-11T08:00:00Z", senderName: "Researcher" }));
     const svc = { createdBy: "svc", submittedById: "u1" };
-    state.files[G1]!.push({ ...file("f3", "mine.zip", "2026-11-11T08:03:00Z"), raw: svc }, { ...file("f4", "later.txt", "2026-11-11T11:00:00Z"), raw: svc });
+    state.files["VULN-1"]!.push({ ...file("f3", "mine.zip", "2026-11-11T08:03:00Z"), raw: svc }, { ...file("f4", "later.txt", "2026-11-11T11:00:00Z"), raw: svc });
     const ev = (await sync.runPoll()).filter((e) => e.type === "file_added");
     expect(ev.map((e) => [e.newValue, e.own]).sort()).toEqual([
       ["later.txt", false],

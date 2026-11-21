@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "preact/hooks";
-import { send, type Msg } from "../shared/protocol";
+import { errorText, send, type Msg } from "../shared/protocol";
 import { isGuid, isVulnId } from "../shared/ids";
-import { sinceStrip } from "./board";
+import { boardColumns, sinceStrip, type CaseSort } from "./board";
+import { hasTag, tagCounts, tagKey } from "../core/annotations";
 import { Board, Drafts, SinceStrip } from "./components/Board";
 import { CasePanel } from "./components/CasePanel";
+import { CaseIcon } from "./components/CaseIcon";
 import { ExportDialog } from "./components/ExportDialog";
 import { Header, NAV, type Page } from "./components/Header";
 import { Announcements } from "./components/Announcements";
@@ -13,9 +15,11 @@ import { PublicCveStrip } from "./components/PublicCves";
 import { Progress } from "./components/Progress";
 import { ReportEditor } from "./components/report/ReportEditor";
 import { unsavedNewTitle } from "./reportLocal";
-import { byRecency, loadView, pinUnseen, type CaseRow, type ViewModel } from "./data";
+import { loadView, pinUnseen, type CaseRow, type ViewModel } from "./data";
 import { PORTAL_REPORTS } from "../shared/urls";
 import { loadInternals, loadSettings } from "./portalInfo";
+import { createReportApi } from "./reportApi";
+import { pageToken } from "./pageToken";
 import { isUnseen } from "../core/derive";
 
 
@@ -41,9 +45,9 @@ function parseHash(): Route {
 
 function searchHit(r: CaseRow, q: string): boolean {
   if (!q) return true;
-  const hay = `${r.ticketNumber ?? ""} ${r.reportNumber} ${r.title} ${r.cves.join(" ")} ${r.status ?? ""}`.toLowerCase();
+  const hay = `${r.ticketNumber ?? ""} ${r.reportNumber} ${r.title} ${r.cves.join(" ")} ${r.status ?? ""} ${r.annotation.tags.join(" ")} ${r.annotation.note}`.toLocaleLowerCase();
   return q
-    .toLowerCase()
+    .toLocaleLowerCase()
     .split(/\s+/)
     .filter(Boolean)
     .every((t) => hay.includes(t));
@@ -53,8 +57,13 @@ export function App() {
   const [view, setView] = useState<ViewModel | null>(null);
   const [route, setRoute] = useState<Route>(parseHash());
   const [query, setQuery] = useState("");
+  const [tagFilter, setTagFilter] = useState("");
+  const [caseSort, setCaseSort] = useState<CaseSort>("recent");
   const [exporting, setExporting] = useState(false);
   const [pinned, setPinned] = useState<Set<string>>(new Set());
+  const [portalReadFeedback, setPortalReadFeedback] = useState<{ error: boolean; text: string } | null>(null);
+  const [clearingPortalRead, setClearingPortalRead] = useState(false);
+  const reportApi = useMemo(() => createReportApi({ fetch: (u, i) => fetch(u, i), token: pageToken }), []);
   const [, tick] = useState(0);
   const [editorKey, setEditorKey] = useState(() => `e${Date.now()}`);
   const adopted = useRef<string | null>(null); // draft id the open editor just created
@@ -65,14 +74,33 @@ export function App() {
     location.hash = hash;
   }, []);
   const openCase = useCallback((rn: string) => go(`case=${rn}`), [go]);
+  const currentCase = route.page === "case" ? route.rn : null;
+  const clearPortalNotifications = useCallback(async () => {
+    if (clearingPortalRead) return;
+    setClearingPortalRead(true);
+    setPortalReadFeedback(null);
+    try {
+      const count = await reportApi.markPortalNotificationsRead();
+      setPortalReadFeedback({ error: false, text: count ? `Marked ${count} MSRC portal notification${count === 1 ? "" : "s"} as read.` : "No unread MSRC portal notifications to clear." });
+    } catch (e) {
+      setPortalReadFeedback({ error: true, text: `Could not mark MSRC portal notifications as read: ${errorText(e)}` });
+    } finally {
+      setClearingPortalRead(false);
+    }
+  }, [clearingPortalRead, reportApi]);
 
-  const rows = useMemo(() => (view ? view.rows.filter((r) => searchHit(r, query.trim())) : []), [view, query]);
+  const tags = useMemo(() => tagCounts(view?.rows.map((r) => r.annotation) ?? []), [view]);
+  const rows = useMemo(() => (view ? view.rows.filter((r) => searchHit(r, query.trim()) && (!tagFilter || hasTag(r.annotation.tags, tagFilter))) : []), [view, query, tagFilter]);
+  useEffect(() => {
+    if (view && tagFilter && !tags.some((t) => tagKey(t.tag) === tagFilter)) setTagFilter("");
+  }, [view, tagFilter, tags]);
   // Reading order for j/k: the board's order (stage, then recency).
   const order = useMemo(() => {
     if (!view) return [] as string[];
-    const rank = (r: CaseRow) => (r.closed ? 9 : r.stage.index < 0 ? 8 : r.stage.index);
-    return [...view.rows].sort((a, b) => rank(a) - rank(b) || byRecency(a, b)).map((r) => r.reportNumber);
-  }, [view]);
+    const visible = rows.some((r) => r.reportNumber === currentCase) ? rows : view.rows;
+    const board = boardColumns(visible, caseSort);
+    return [...board.columns.flatMap((c) => c.rows), ...board.offBoard, ...board.closed].map((r) => r.reportNumber);
+  }, [view, rows, caseSort, currentCase]);
 
   useEffect(() => {
     reload();
@@ -100,8 +128,6 @@ export function App() {
     };
   }, [reload]);
 
-  const currentCase = route.page === "case" ? route.rn : null;
-
   // Opening a case marks its changes seen (locally only); the case page keeps
   // marking what was new at the moment it opened.
   useEffect(() => {
@@ -113,6 +139,7 @@ export function App() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (e.defaultPrevented) return;
       const el = e.target as HTMLElement | null;
       const typing = !!el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.tagName === "SELECT" || el.isContentEditable);
       if (document.querySelector("dialog[open]")) return;
@@ -146,16 +173,15 @@ export function App() {
         onPage={(p) => go(p)}
         onHome={() => {
           setQuery("");
+          setTagFilter("");
           if (route.page === "cases") window.scrollTo(0, 0);
           else go("cases");
         }}
         unseen={view.unseen}
-        points={view.points.total}
-        awarded={view.awards.total}
         query={query}
         onQuery={setQuery}
         searchRef={searchRef}
-        onSync={() => void send({ type: "sync:now" })}
+        onSync={() => void send({ type: "sync:now", full: true })}
         onExport={() => setExporting(true)}
         onNew={() => go("new")}
       />
@@ -173,6 +199,13 @@ export function App() {
       {st.auth === "relogin" && (
         <div class="banner" role="status">
           Renewing your MSRC session in the background…
+        </div>
+      )}
+      {portalReadFeedback && (
+        <div class={`banner${portalReadFeedback.error ? " banner--warn" : ""}`} role={portalReadFeedback.error ? "alert" : "status"}>
+          <span>{portalReadFeedback.text}</span>
+          {portalReadFeedback.error && <button type="button" class="btn" onClick={() => void clearPortalNotifications()} disabled={clearingPortalRead}>Retry</button>}
+          <button type="button" class="link" onClick={() => setPortalReadFeedback(null)}>Dismiss</button>
         </div>
       )}
 
@@ -201,38 +234,57 @@ export function App() {
         </main>
       ) : route.page === "cases" ? (
         <main class="cases-page">
-          <SinceStrip strip={sinceStrip(view.events, 4)} onOpen={openCase} onAll={() => go("activity")} onMarkSeen={() => void send({ type: "seen:mark" })} />
-          {query && (
-            <p class="search-note">
-              {rows.length} of {view.rows.length} cases match “{query}”.{" "}
-              <button class="link" onClick={() => setQuery("")}>
-                Clear
-              </button>
-            </p>
-          )}
-          {!query && <PublicCveStrip unlinked={view.publicUnlinked} dismissed={view.publicDismissed} rows={view.rows} onOpen={openCase} />}
-          {!query && <Drafts drafts={view.drafts} unsavedNew={unsavedNewTitle()} onOpenDraft={(id) => go(`draft=${id}`)} onNew={() => go("new")} />}
-          <Board rows={rows} onOpen={openCase} searching={!!query} />
+          <header class="boardbar">
+            <div class="boardbar__heading">
+              <h1>Cases</h1>
+              <span class="boardbar__count" aria-live="polite">
+                {query || tagFilter ? `${rows.length} of ${view.rows.length} cases` : `${rows.length} total`}
+              </span>
+            </div>
+            <div class="boardbar__controls">
+              {rows.some((r) => r.closed) && (
+                <button type="button" class="btn boardbar__closed" onClick={() => document.getElementById("closed-cases-title")?.focus()}>
+                  Closed cases <CaseIcon name="down" />
+                </button>
+              )}
+              <label class="sr-only" for="case-tag-filter">Filter cases by tag</label>
+              <select id="case-tag-filter" class="input" title="Filter cases by tag" value={tagFilter} onChange={(e) => setTagFilter((e.target as HTMLSelectElement).value)}>
+                <option value="">All tags</option>
+                {tags.map(({ tag, count }) => <option key={tagKey(tag)} value={tagKey(tag)}>{tag} ({count})</option>)}
+              </select>
+              <label class="sr-only" for="case-sort">Sort cases</label>
+              <select id="case-sort" class="input" title="Sort cases" value={caseSort} onChange={(e) => setCaseSort((e.target as HTMLSelectElement).value as CaseSort)}>
+                <option value="recent">Latest activity</option>
+                <option value="tag">Tag A–Z</option>
+                <option value="title">Title A–Z</option>
+              </select>
+              {(tagFilter || query) && <button class="link" onClick={() => { setTagFilter(""); setQuery(""); }}>Clear</button>}
+            </div>
+          </header>
+          <SinceStrip strip={sinceStrip(view.events)} onOpen={openCase} onAll={() => go("activity")} onMarkSeen={() => void send({ type: "seen:mark" })} />
+          {!query && !tagFilter && <PublicCveStrip unlinked={view.publicUnlinked} dismissed={view.publicDismissed} rows={view.rows} onOpen={openCase} />}
+          {!query && !tagFilter && <Drafts drafts={view.drafts} unsavedNew={unsavedNewTitle()} onOpenDraft={(id) => go(`draft=${id}`)} onNew={() => go("new")} />}
+          <Board rows={rows} onOpen={openCase} searching={!!(query || tagFilter)} sort={caseSort} />
         </main>
       ) : route.page === "case" ? (
         caseRow ? (
           <main class="case-page">
             <nav class="casebar" aria-label="Case navigation">
               <button class="link" onClick={() => go("cases")}>
-                ← All cases
+                <CaseIcon name="back" /> All cases
               </button>
               <span class="top__grow" />
               <span class="muted">
                 {idx + 1} of {order.length}
               </span>
-              <button class="btn btn--icon" disabled={idx <= 0} onClick={() => openCase(order[idx - 1]!)} title="Previous case (k)">
-                ‹
+              <button class="btn btn--icon" disabled={idx <= 0} onClick={() => openCase(order[idx - 1]!)} title="Previous case (k)" aria-label="Previous case">
+                <CaseIcon name="previous" />
               </button>
-              <button class="btn btn--icon" disabled={idx >= order.length - 1} onClick={() => openCase(order[idx + 1]!)} title="Next case (j)">
-                ›
+              <button class="btn btn--icon" disabled={idx >= order.length - 1} onClick={() => openCase(order[idx + 1]!)} title="Next case (j)" aria-label="Next case">
+                <CaseIcon name="next" />
               </button>
             </nav>
-            <CasePanel row={caseRow} view={{ ...view, events: pinUnseen(view.events, pinned) }} />
+            <CasePanel key={caseRow.reportNumber} row={caseRow} view={{ ...view, events: pinUnseen(view.events, pinned) }} onAnnotationChange={reload} onSelectTag={(tag) => { setTagFilter(tagKey(tag)); setQuery(""); go("cases"); }} />
           </main>
         ) : (
           <main class="page">
@@ -240,7 +292,7 @@ export function App() {
           </main>
         )
       ) : route.page === "activity" ? (
-        <ActivityPage view={view} onOpen={openCase} onMarkSeen={() => void send({ type: "seen:mark" })} />
+        <ActivityPage view={view} onOpen={openCase} onMarkSeen={() => void send({ type: "seen:mark" })} onClearPortal={() => void clearPortalNotifications()} clearingPortalRead={clearingPortalRead} />
       ) : route.page === "recognition" ? (
         <RecognitionPage view={view} />
       ) : route.page === "internals" ? (

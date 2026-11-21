@@ -35,6 +35,13 @@ Licensed under the [MIT License](LICENSE).
   Complete), with what changed since your last visit on top. A case MSRC has put on hold until you
   reply is marked **Action required**. Cases near or past the 90-day disclosure mark, and cases MSRC
   has gone quiet on, are tagged. Search with `/`, step through cases with `j` and `k`.
+- **Private case workspace.** Add a free-text note and any Unicode tags to each case, such as a
+  service, driver, or research theme. Tags and a note preview sit below the case title; the editor
+  opens when needed. Reuse tags from suggestions, select a case tag to filter the board, or use the
+  compact board controls to filter and sort by tag or title. Board cards show tags and private-note
+  presence as quiet text; the latest activity sits beside its date. Board search also finds notes and
+  tags. This data stays in the browser's extension storage: it is never sent to MSRC and is excluded
+  from the report export.
 - **Case page.** The portal's case data, including cross-tenant impact and Canary reproduction answers, plus one timeline of messages, status changes (with
   the exact time from MSRC's notification feed) and file uploads. On top: the case's day against the
   90-day mark and when MSRC last wrote, MSRC's banner for the case, and the portal's explanation of
@@ -131,15 +138,17 @@ Read this before installing.
   Use it only in a profile you trust.
 - **Signed-in portal tabs are seeded.** A new tab on `msrc.microsoft.com/report` gets that session
   copied in, so it doesn't bounce to the sign-in page.
-- **Everything else stays local.** Cases, messages and settings live in the browser's own storage.
+- **Everything else stays local.** Cases, messages, notes, tags and settings live in the browser's own storage.
   There are no servers and no telemetry. The only host it contacts is Microsoft's: the portal, its
-  API and its sign-in service.
+  API and its sign-in service. Notes and tags are not encrypted separately; removing the extension
+  or clearing its storage deletes them.
 - **The public CVE check sends nothing about you.** It reads the Security Update Guide without
   signing in, and matches your credit name on your machine.
 - **Nothing is sent to MSRC without a click.** Saving a draft, attaching a file, submitting,
   sending a message and changing a planned disclosure are each an explicit action. Submitting,
   attaching, sending and cancelling a disclosure ask for confirmation, because none can be undone.
-- **Exports contain your case data** (titles, report text, messages) but never login tokens.
+- **Exports contain your portal case data** (titles, report text, messages), but not login tokens or
+  private notes and tags.
 
 Removing the extension deletes everything it stored.
 

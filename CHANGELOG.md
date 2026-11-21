@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.4.0 (2026-11-21)
+
+### Added
+
+- **Private notes and Unicode tags.** Add a note or tag from the case header, reuse existing tags, and click a tag to filter the board. Search covers notes and tags, and cases can be sorted by latest activity, tag, or title. Notes and tags stay in the browser and are excluded from exports.
+- **CVSS scores.** Case details calculate base, temporal, and environmental scores from CVSS 3.0 and 3.1 report vectors when the corresponding metrics are present. Linked CVEs show Microsoft's published scores, severity, and exploitability when available, with a link to the advisory.
+- **MSRC notifications.** Opening a case marks its portal bell notifications from before the last sync as read. Use **Clear MSRC bell** in Activity to clear the full portal notification list.
+- **Flagged messages.** Jump to the flagged messages MSRC lists for a case. **Unflag** checks with MSRC again and shows whether the flag was removed.
+
+### Improved
+
+- **Navigation.** A more compact header groups the main views and keeps Search, Sync, Export, and New report close at hand.
+- **Cases board.** Open cards align submission age, MSRC activity, and the latest event across stages. The always-visible **Closed cases** table separates outcome, CVE, and last activity, with a shortcut from the toolbar.
+- **Latest changes.** Unseen items appear first, and recent history stays visible after you've caught up.
+- **Case pages.** A status sidebar groups the case clock, next steps, bounty, technical details, and planned disclosures. The 90-day mark is easier to scan, with routine MSRC guidance available on demand and action requests shown prominently.
+- **Report and timeline navigation.** Jump to the latest timeline entry or directly to a section of the report. The timeline groups updates by date, distinguishes messages, status changes, and uploads, and collapses older automated messages for easier scanning.
+
+### Fixed
+
+- Files uploaded after submission now appear in the case timeline and Files tab, including updated uploads with the same filename. **Sync now** refreshes case details and attachments.
+- Activity describes flag changes as changes to a case's flagged-message indicator, including in older entries.
+
 ## 0.3.0 (2026-11-13)
 
 ### Added

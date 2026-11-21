@@ -1,9 +1,9 @@
 // IndexedDB store shared by the service worker (writer) and the dashboard
 // (reader) — both run on the extension origin, so they see the same database.
-import type { CaseRecord, ChangeEvent, ThreadMessage, VulnId } from "../shared/types";
+import type { CaseAnnotation, CaseRecord, ChangeEvent, ThreadMessage, VulnId } from "../shared/types";
 
 const DB_NAME = "msrc-dashboard";
-const VERSION = 1;
+const VERSION = 2;
 let dbPromise: Promise<IDBDatabase> | null = null;
 
 function req<T>(r: IDBRequest<T>): Promise<T> {
@@ -25,14 +25,17 @@ export function openDb(): Promise<IDBDatabase> {
   if (!dbPromise) {
     dbPromise = new Promise((resolve, reject) => {
       const r = indexedDB.open(DB_NAME, VERSION);
-      r.onupgradeneeded = () => {
+      r.onupgradeneeded = (event) => {
         const db = r.result;
-        db.createObjectStore("cases", { keyPath: "reportNumber" });
-        const messages = db.createObjectStore("messages", { keyPath: "id" });
-        messages.createIndex("reportNumber", "reportNumber");
-        const events = db.createObjectStore("events", { keyPath: "key" });
-        events.createIndex("reportNumber", "reportNumber");
-        db.createObjectStore("meta");
+        if (event.oldVersion < 1) {
+          db.createObjectStore("cases", { keyPath: "reportNumber" });
+          const messages = db.createObjectStore("messages", { keyPath: "id" });
+          messages.createIndex("reportNumber", "reportNumber");
+          const events = db.createObjectStore("events", { keyPath: "key" });
+          events.createIndex("reportNumber", "reportNumber");
+          db.createObjectStore("meta");
+        }
+        if (event.oldVersion < 2) db.createObjectStore("caseAnnotations", { keyPath: "reportNumber" });
       };
       r.onsuccess = () => resolve(r.result);
       r.onerror = () => reject(r.error);
@@ -47,6 +50,22 @@ async function tx(stores: string[], mode: IDBTransactionMode): Promise<IDBTransa
 
 export async function getAllCases(): Promise<CaseRecord[]> {
   return req((await tx(["cases"], "readonly")).objectStore("cases").getAll() as IDBRequest<CaseRecord[]>);
+}
+
+export async function getCaseAnnotations(): Promise<CaseAnnotation[]> {
+  return req((await tx(["caseAnnotations"], "readonly")).objectStore("caseAnnotations").getAll() as IDBRequest<CaseAnnotation[]>);
+}
+
+/** Update only the changed part so a note edit cannot overwrite a tag edit. */
+export async function updateCaseAnnotation(rn: VulnId, patch: Partial<Pick<CaseAnnotation, "note" | "tags">>): Promise<CaseAnnotation> {
+  const t = await tx(["caseAnnotations"], "readwrite");
+  const s = t.objectStore("caseAnnotations");
+  const old = (await req(s.get(rn))) as CaseAnnotation | undefined;
+  const next: CaseAnnotation = { reportNumber: rn, note: old?.note ?? "", tags: old?.tags ?? [], ...patch };
+  if (next.note || next.tags.length) s.put(next);
+  else s.delete(rn);
+  await done(t);
+  return next;
 }
 
 export async function putCases(cases: CaseRecord[]): Promise<void> {
@@ -80,6 +99,7 @@ export async function getEvents(): Promise<ChangeEvent[]> {
 export const META = {
   baselineDone: "baselineDone",
   lastSyncAt: "lastSyncAt",
+  lastSyncStartedAt: "lastSyncStartedAt",
   lastError: "lastError",
   drafts: "drafts",
   cveSnapshot: "cveSnapshot",

@@ -63,6 +63,13 @@ export interface CaseRecord {
   recheck?: number; // refetches so far while the details lag behind the list row (sync.ts MAX_RECHECKS)
 }
 
+/** Researcher's private workspace data, stored in the extension only. */
+export interface CaseAnnotation {
+  reportNumber: VulnId;
+  note: string;
+  tags: string[];
+}
+
 export type EventType =
   | "case_added"
   | "msrc_message"

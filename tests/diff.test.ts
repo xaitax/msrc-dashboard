@@ -76,9 +76,11 @@ describe("diffCase", () => {
     expect(ev[0]).toMatchObject({ type: "field_changed", field: "cvssVectorString", newValue: "CVSS:3.1/AV:N" });
   });
 
-  it("treats flag toggles as the researcher's own action", () => {
+  it("describes a flagged message without attributing it to the researcher", () => {
     const ev = diffCase(caseRec("VULN-1", base), caseRec("VULN-1", { ...base, isFlagged: true }), ctx);
-    expect(ev[0]).toMatchObject({ field: "isFlagged", own: true, seen: true });
+    expect(ev[0]).toMatchObject({ field: "isFlagged", summary: "This report contains a flagged message", own: false, seen: false });
+    const cleared = diffCase(caseRec("VULN-1", { ...base, isFlagged: true }), caseRec("VULN-1", base), ctx);
+    expect(cleared[0]).toMatchObject({ field: "isFlagged", summary: "This report no longer contains a flagged message", own: false, seen: false });
   });
 
   it("does not invent changes when only one side has full details", () => {

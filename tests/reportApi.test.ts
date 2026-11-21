@@ -44,6 +44,46 @@ const json = (body: unknown, status = 200) => new Response(JSON.stringify(body),
 const header = (c: Call, h: string) => new Headers(c.init.headers).get(h);
 const body = (c: Call) => JSON.parse(String(c.init.body));
 
+describe("portal bell notifications", () => {
+  const old = { id: "n-old", reportNumber: "VULN-123456", read: false, createdOn: "2026-11-20T10:00:00Z" };
+  const newer = { id: "n-new", reportNumber: "VULN-123456", read: false, createdOn: "2026-11-20T12:00:00Z" };
+  const other = { id: "n-other", reportNumber: "VULN-654321", read: false, createdOn: "2026-11-20T09:00:00Z" };
+
+  it("marks only synced notifications for the opened case", async () => {
+    const { api, calls } = harness([json({ value: [newer, old, other] }), new Response(null, { status: 204 })]);
+    expect(await api.markPortalNotificationsRead("VULN-123456", Date.parse("2026-11-20T11:00:00Z"))).toBe(1);
+    const query = new URL(calls[0]!.url);
+    expect(query.pathname).toBe("/portal/v2.0/notification");
+    expect(query.searchParams.get("$filter")).toBe("read eq false and reportNumber eq 'VULN-123456'");
+    expect(calls[1]!.url).toBe("https://api.msrc.microsoft.com/portal/v2.0/notification/NotificationService.MarkAsRead");
+    expect(calls[1]!.init.method).toBe("POST");
+    expect(header(calls[1]!, "Authorization")).toBe("Bearer tok-1");
+    expect(body(calls[1]!)).toEqual({ notificationIds: ["n-old"] });
+  });
+
+  it("clears all visible report notifications, including ones already seen locally", async () => {
+    const { api, calls } = harness([json({ value: [newer, old, other, { id: "n-orphan", read: false }] }), new Response(null, { status: 204 })]);
+    expect(await api.markPortalNotificationsRead()).toBe(3);
+    expect(body(calls[1]!)).toEqual({ notificationIds: ["n-new", "n-old", "n-other"] });
+  });
+
+  it("trusts the flag filter even when a matching message is serialized as unflagged", async () => {
+    const matching = { id: "m1", reportNumber: "VULN-123456", isFlagged: false, body: "A reply" };
+    const { api, calls } = harness([json({ value: [matching, { ...matching, id: "m2", reportNumber: "VULN-654321" }] })]);
+    expect(await api.flaggedMessages("VULN-123456")).toMatchObject([{ id: "m1", body: "A reply" }]);
+    expect(new URL(calls[0]!.url).searchParams.get("$filter")).toBe("reportNumber eq 'VULN-123456' and conversationId eq null and isFlagged eq true");
+  });
+
+  it("sends the portal's unflag action for one message and surfaces a permission denial", async () => {
+    const { api, calls } = harness([new Response(null, { status: 403 })]);
+    await expect(api.unflagMessage(GUID)).rejects.toMatchObject({ status: 403 });
+    expect(calls).toHaveLength(1);
+    expect(new URL(calls[0]!.url).pathname).toBe("/message/MessageService.Unflag");
+    expect(calls[0]!.init.method).toBe("POST");
+    expect(body(calls[0]!)).toEqual({ messageIds: [GUID] });
+  });
+});
+
 describe("MSRC pre-submit checks", () => {
   const report = { title: "T", description: "D", reproductionSteps: "R", callstack: "" };
   it("analyzes an existing draft and requests the portal's quality gates", async () => {

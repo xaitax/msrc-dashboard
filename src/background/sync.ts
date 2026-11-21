@@ -6,7 +6,6 @@ import { creditedTo, creditNames, publicCveFrom, resolvePublicCves, type CveLink
 import { MSRC_SENDER } from "../core/derive";
 import { cveEvents, diffCase, IGNORED_FIELDS, messageEvents, stableStringify } from "../core/diff";
 import { statusHistoryFrom, statusTimeFrom, type StatusHistory } from "../core/history";
-import { isGuid } from "../shared/ids";
 import type { SyncProgress } from "../shared/protocol";
 import type { CaseRecord, ChangeEvent, DraftRef, FileRecord, ReportDetail, ReportListItem, ThreadMessage, VulnId } from "../shared/types";
 import { addEvents, commitPoll, getAllCases, getMessages, getMeta, META, putCases, putMessages, setMeta } from "../store/db";
@@ -16,7 +15,7 @@ export interface SyncApi {
   listReports(): Promise<ReportListItem[]>;
   getReportDetail(rn: VulnId): Promise<ReportDetail | null>;
   messagesNewestFirst(skip: number): Promise<ThreadMessage[]>;
-  listFiles(reportId: string): Promise<FileRecord[]>;
+  listFiles(reportNumber: VulnId): Promise<FileRecord[]>;
   /** Notification feed (status changes with exact times). Optional; fetched only when needed. */
   listNotifications?(): Promise<Record<string, unknown>[]>;
   /** Public Security Update Guide credits since a date (no token). Optional. */
@@ -106,7 +105,7 @@ export function createSync(
   /** `rechecks`: re-checks already spent on the current disagreement (0 after a list move). */
   async function fetchCase(item: ReportListItem, prev?: CaseRecord, rechecks = 0): Promise<CaseRecord> {
     const detail = await api.getReportDetail(item.reportNumber);
-    const files = isGuid(item.id) ? await api.listFiles(item.id) : [];
+    const files = await api.listFiles(item.reportNumber);
     const next: CaseRecord = { reportNumber: item.reportNumber, list: item, detail, files, detailFetchedAt: now().getTime(), rev: (prev?.rev ?? 0) + 1 };
     if (detailLags(next)) next.recheck = rechecks + 1;
     return next;
@@ -190,8 +189,10 @@ export function createSync(
 
 
   async function record<T>(work: () => Promise<T>): Promise<T> {
+    const startedAt = now().getTime();
     try {
       const out = await work();
+      await setMeta(META.lastSyncStartedAt, startedAt);
       await setMeta(META.lastSyncAt, now().getTime());
       await setMeta(META.lastError, null);
       return out;
