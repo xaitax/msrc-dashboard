@@ -1,43 +1,30 @@
-// View helpers for layout A: the "Since your last visit" strip and the
-// pipeline board columns.
-import type { ChangeEvent, VulnId } from "../shared/types";
-import { byRecency, newestFirst, type CaseRow } from "./data";
+// View helpers for the latest changes and pipeline board columns.
+import type { ChangeEvent } from "../shared/types";
+import { byRecency, casePreviewOrder, type CaseRow } from "./data";
 import { isUnseen, PIPELINE, type StageKey } from "../core/derive";
 import { compareTagNames, sortedTags } from "../core/annotations";
 
-export interface StripCard {
-  reportNumber: VulnId;
-  ticketNumber: string | null;
-  latest: ChangeEvent;
-  count: number;
+interface StripEntry {
+  event: ChangeEvent;
+  unseen: boolean;
 }
 
 export interface Strip {
-  cards: StripCard[];
-  unseenCases: number;
+  entries: StripEntry[];
   total: number; // unseen changes overall
 }
 
-function group(events: ChangeEvent[]): StripCard[] {
-  const byCase = new Map<VulnId, StripCard>();
-  for (const e of [...events].sort(newestFirst)) {
-    const card = byCase.get(e.reportNumber);
-    if (card) card.count += 1;
-    else byCase.set(e.reportNumber, { reportNumber: e.reportNumber, ticketNumber: e.ticketNumber, latest: e, count: 1 });
+/** One preview per case, ordered by the latest event's actual time. */
+export function sinceStrip(events: ChangeEvent[]): Strip {
+  const entries = new Map<ChangeEvent["reportNumber"], StripEntry>();
+  const recent = events.filter((event) => Number.isFinite(Date.parse(event.occurredAt))).sort(casePreviewOrder);
+  for (const event of recent) {
+    const unseen = isUnseen(event);
+    const entry = entries.get(event.reportNumber);
+    if (entry) entry.unseen ||= unseen;
+    else entries.set(event.reportNumber, { event, unseen });
   }
-  return [...byCase.values()];
-}
-
-/** One preview per case, with unseen updates first and recent history filling any free slots. */
-export function sinceStrip(events: ChangeEvent[], max = 3): Strip {
-  const unseen = events.filter(isUnseen);
-  const newCards = group(unseen);
-  const cards = newCards.slice(0, max);
-  if (cards.length < max) {
-    const previewed = new Set(cards.map((card) => card.reportNumber));
-    cards.push(...group(events.filter((event) => !previewed.has(event.reportNumber))).slice(0, max - cards.length));
-  }
-  return { cards, unseenCases: newCards.length, total: unseen.length };
+  return { entries: [...entries.values()], total: events.filter(isUnseen).length };
 }
 
 export interface Column {

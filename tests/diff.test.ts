@@ -49,12 +49,24 @@ describe("diffCase", () => {
     expect(diffCase(caseRec("VULN-1", base), caseRec("VULN-1", { ...base, statusReason: "FIXED" }), ctx)[0]!.summary).toBe("Status reason — → Fixed");
   });
 
+  it("names the first observed bounty status when no previous status was recorded", () => {
+    const prev = caseRec("VULN-1", { ...base, bounty: null });
+    const next = caseRec("VULN-1", { ...base, bounty: { status: "PENDING_REVIEW" } });
+    expect(diffCase(prev, next, ctx)[0]).toMatchObject({ type: "bounty", summary: "Bounty pending review" });
+  });
+
   it("folds all bounty sub-field changes into one bounty event", () => {
     const next = { ...base, bounty: { amount: 5000, program: "Windows Insider", status: "AWARDED" } };
     const ev = diffCase(caseRec("VULN-1", base), caseRec("VULN-1", next), ctx);
     expect(ev.map((e) => e.type)).toEqual(["bounty"]);
-    expect(ev[0]!.summary).toContain("Bounty Pending → Awarded");
-    expect(ev[0]!.summary).toContain("Bounty amount — → $5,000");
+    expect(ev[0]!.summary).toBe("Bounty Pending → Awarded · Amount: $5,000 · Program Windows → Windows Insider");
+  });
+
+  it("keeps a real bounty status transition when the amount and program first appear", () => {
+    const prev = caseRec("VULN-1", { ...base, bounty: { status: "PENDING_REVIEW", amount: null, program: null } });
+    const next = caseRec("VULN-1", { ...base, bounty: { status: "AWARDED_CLOSED", amount: 8000, program: "Windows Insider Preview Bounty Program" } });
+    expect(diffCase(prev, next, ctx)[0]!.summary)
+      .toBe("Bounty Pending Review → Awarded – Closed · Amount: $8,000 · Program: Windows Insider Preview Bounty Program");
   });
 
   it("reports new files and disclosure events; the researcher's 'related CVE' is a field change, not an assigned CVE", () => {

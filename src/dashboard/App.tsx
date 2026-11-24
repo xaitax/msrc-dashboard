@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "preact/hooks";
 import { errorText, send, type Msg } from "../shared/protocol";
 import { isGuid, isVulnId } from "../shared/ids";
-import { boardColumns, sinceStrip, type CaseSort } from "./board";
+import { boardColumns, type CaseSort } from "./board";
 import { hasTag, tagCounts, tagKey } from "../core/annotations";
 import { Board, Drafts, SinceStrip } from "./components/Board";
 import { CasePanel } from "./components/CasePanel";
@@ -10,7 +10,8 @@ import { ExportDialog } from "./components/ExportDialog";
 import { Header, NAV, type Page } from "./components/Header";
 import { Announcements } from "./components/Announcements";
 import { InternalsPage } from "./components/Internals";
-import { ActivityPage, ProfilePage, RecognitionPage } from "./components/Pages";
+import { ProfilePage, RecognitionPage } from "./components/Pages";
+import { ActivityPage } from "./components/ActivityPage";
 import { PublicCveStrip } from "./components/PublicCves";
 import { Progress } from "./components/Progress";
 import { ReportEditor } from "./components/report/ReportEditor";
@@ -20,6 +21,9 @@ import { PORTAL_REPORTS } from "../shared/urls";
 import { loadInternals, loadSettings } from "./portalInfo";
 import { createReportApi } from "./reportApi";
 import { pageToken } from "./pageToken";
+import { useAppearance } from "./useAppearance";
+import { useReleaseUpdate } from "./useReleaseUpdate";
+import { ReleaseNotice } from "./components/ReleaseUpdate";
 import { isUnseen } from "../core/derive";
 
 
@@ -54,6 +58,8 @@ function searchHit(r: CaseRow, q: string): boolean {
 }
 
 export function App() {
+  const appearance = useAppearance();
+  const releaseUpdate = useReleaseUpdate();
   const [view, setView] = useState<ViewModel | null>(null);
   const [route, setRoute] = useState<Route>(parseHash());
   const [query, setQuery] = useState("");
@@ -91,16 +97,16 @@ export function App() {
 
   const tags = useMemo(() => tagCounts(view?.rows.map((r) => r.annotation) ?? []), [view]);
   const rows = useMemo(() => (view ? view.rows.filter((r) => searchHit(r, query.trim()) && (!tagFilter || hasTag(r.annotation.tags, tagFilter))) : []), [view, query, tagFilter]);
+  const board = useMemo(() => boardColumns(rows, caseSort), [rows, caseSort]);
   useEffect(() => {
     if (view && tagFilter && !tags.some((t) => tagKey(t.tag) === tagFilter)) setTagFilter("");
   }, [view, tagFilter, tags]);
   // Reading order for j/k: the board's order (stage, then recency).
   const order = useMemo(() => {
     if (!view) return [] as string[];
-    const visible = rows.some((r) => r.reportNumber === currentCase) ? rows : view.rows;
-    const board = boardColumns(visible, caseSort);
-    return [...board.columns.flatMap((c) => c.rows), ...board.offBoard, ...board.closed].map((r) => r.reportNumber);
-  }, [view, rows, caseSort, currentCase]);
+    const visibleBoard = currentCase && !rows.some((r) => r.reportNumber === currentCase) ? boardColumns(view.rows, caseSort) : board;
+    return [...visibleBoard.columns.flatMap((c) => c.rows), ...visibleBoard.offBoard, ...visibleBoard.closed].map((r) => r.reportNumber);
+  }, [view, rows, board, caseSort, currentCase]);
 
   useEffect(() => {
     reload();
@@ -178,6 +184,7 @@ export function App() {
           else go("cases");
         }}
         unseen={view.unseen}
+        recognitionTotals={view.rows.length ? { points: view.points.total, awarded: view.awards.total } : undefined}
         query={query}
         onQuery={setQuery}
         searchRef={searchRef}
@@ -186,6 +193,7 @@ export function App() {
         onNew={() => go("new")}
       />
 
+      <ReleaseNotice update={releaseUpdate} />
       <Announcements load={portalSettings} />
 
       {st.auth === "signed_out" && (
@@ -221,6 +229,8 @@ export function App() {
           onLeave={() => go("cases")}
           onOpenCase={openCase}
         />
+      ) : route.page === "profile" ? (
+        <ProfilePage appearance={appearance} update={releaseUpdate} />
       ) : view.rows.length === 0 ? (
         <main class="first-run">
           {st.auth === "signed_out" ? (
@@ -261,10 +271,10 @@ export function App() {
               {(tagFilter || query) && <button class="link" onClick={() => { setTagFilter(""); setQuery(""); }}>Clear</button>}
             </div>
           </header>
-          <SinceStrip strip={sinceStrip(view.events)} onOpen={openCase} onAll={() => go("activity")} onMarkSeen={() => void send({ type: "seen:mark" })} />
+          <SinceStrip events={view.events} rows={view.rows} stageCount={board.columns.length} onMarkSeen={() => void send({ type: "seen:mark" })} />
           {!query && !tagFilter && <PublicCveStrip unlinked={view.publicUnlinked} dismissed={view.publicDismissed} rows={view.rows} onOpen={openCase} />}
           {!query && !tagFilter && <Drafts drafts={view.drafts} unsavedNew={unsavedNewTitle()} onOpenDraft={(id) => go(`draft=${id}`)} onNew={() => go("new")} />}
-          <Board rows={rows} onOpen={openCase} searching={!!(query || tagFilter)} sort={caseSort} />
+          <Board board={board} onOpen={openCase} searching={!!(query || tagFilter)} />
         </main>
       ) : route.page === "case" ? (
         caseRow ? (
@@ -292,13 +302,11 @@ export function App() {
           </main>
         )
       ) : route.page === "activity" ? (
-        <ActivityPage view={view} onOpen={openCase} onMarkSeen={() => void send({ type: "seen:mark" })} onClearPortal={() => void clearPortalNotifications()} clearingPortalRead={clearingPortalRead} />
+        <ActivityPage view={view} onMarkSeen={() => void send({ type: "seen:mark" })} onClearPortal={() => void clearPortalNotifications()} clearingPortalRead={clearingPortalRead} />
       ) : route.page === "recognition" ? (
         <RecognitionPage view={view} />
-      ) : route.page === "internals" ? (
-        <InternalsPage loadSettings={portalSettings} loadInternals={portalInternals} />
       ) : (
-        <ProfilePage />
+        <InternalsPage loadSettings={portalSettings} loadInternals={portalInternals} />
       )}
 
       {exporting && <ExportDialog view={view} onClose={() => setExporting(false)} />}

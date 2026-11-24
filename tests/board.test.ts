@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { boardColumns, sinceStrip } from "../src/dashboard/board";
 import { findPlacements } from "../src/core/recognition";
-import { buildView } from "../src/dashboard/data";
+import { buildView, groupFeed } from "../src/dashboard/data";
 import type { AppState } from "../src/shared/protocol";
 import type { ChangeEvent } from "../src/shared/types";
 import { caseRec, msg } from "./helpers";
@@ -14,38 +14,55 @@ const ev = (rn: string, at: string, p: Partial<ChangeEvent> = {}): ChangeEvent =
 };
 
 describe("sinceStrip", () => {
-  it("shows one card per case with the newest change and how many more it has", () => {
-    const s = sinceStrip([ev("VULN-1", "2026-11-11T09:00"), ev("VULN-1", "2026-11-11T10:00", { summary: "newest" }), ev("VULN-2", "2026-11-10T09:00")], 4);
-    expect(s.cards.map((c) => [c.reportNumber, c.latest.summary, c.count])).toEqual([
-      ["VULN-1", "newest", 2],
-      ["VULN-2", "s3", 1],
-    ]);
-    expect(s.unseenCases).toBe(2);
-    expect(s.total).toBe(3);
+  it("provides the full list so the strip can fill its available columns", () => {
+    const events = [1, 2, 3, 4, 5, 6, 7].map((i) => ev(`VULN-${i}`, `2026-11-0${i}T09:00`));
+    const strip = sinceStrip(events);
+    expect(strip.entries.map(({ event }) => event)).toEqual(events.slice().reverse());
+    expect(strip.total).toBe(7);
   });
-  it("caps the strip and reports the overflow as more cases", () => {
-    const evs = [1, 2, 3, 4, 5, 6, 7].map((i) => ev(`VULN-${i}`, `2026-11-0${i}T09:00`));
-    const s = sinceStrip(evs);
-    expect(s.cards).toHaveLength(3);
-    expect(s.cards[0]!.reportNumber).toBe("VULN-7");
-    expect(s.unseenCases).toBe(7);
+
+  it("keeps recent updates in the same order when they are marked seen", () => {
+    const older = ev("VULN-1", "2026-11-01T09:00");
+    const newer = ev("VULN-2", "2026-11-02T09:00", { seen: true });
+    const events = [older, newer];
+    const before = sinceStrip(events);
+    const after = sinceStrip(events.map((event) => ({ ...event, seen: true })));
+    expect(before.entries.map(({ event }) => event.key)).toEqual([newer.key, older.key]);
+    expect(after.entries.map(({ event }) => event.key)).toEqual([newer.key, older.key]);
+    expect(after.total).toBe(0);
   });
-  it("keeps recent history visible when all changes have been seen", () => {
-    const s = sinceStrip([ev("VULN-1", "2026-11-01T09:00", { seen: true }), ev("VULN-2", "2026-11-02T09:00", { seen: true }), ev("VULN-3", "2026-11-03T09:00", { own: true, seen: true, type: "own_message" })], 4);
-    expect(s.cards.map((c) => c.reportNumber)).toEqual(["VULN-3", "VULN-2", "VULN-1"]);
-    expect(s).toMatchObject({ unseenCases: 0, total: 0 });
+
+  it("reserves a single slot per case and keeps its unseen indicator", () => {
+    const summary = "Bounty review started";
+    const latest = ev("VULN-1", "2026-11-11T10:45:51", { summary, seen: true });
+    const other = ev("VULN-2", "2026-11-11T10:45:37", { summary });
+    const repeated = ev("VULN-1", "2026-11-11T10:45:15", { summary: "MSRC replied" });
+    const earlier = ev("VULN-1", "2026-11-11T10:44:58", { summary: "Status changed" });
+    const strip = sinceStrip([repeated, earlier, other, latest]);
+    expect(strip.entries).toEqual([
+      { event: latest, unseen: true },
+      { event: other, unseen: true },
+    ]);
+    expect(strip.total).toBe(3);
   });
-  it("fills spare preview slots with history from other cases", () => {
-    const s = sinceStrip([
-      ev("VULN-1", "2026-11-01T09:00"),
-      ev("VULN-1", "2026-11-02T09:00", { seen: true }),
-      ev("VULN-2", "2026-11-03T09:00", { seen: true }),
-    ]);
-    expect(s.cards.map((c) => [c.reportNumber, c.latest.seen, c.count])).toEqual([
-      ["VULN-1", false, 1],
-      ["VULN-2", true, 1],
-    ]);
-    expect(s).toMatchObject({ unseenCases: 1, total: 1 });
+
+  it.each([
+    { scenario: "a simultaneous flag arrives first", flagFirst: true, later: false },
+    { scenario: "a simultaneous reply arrives first", flagFirst: false, later: false },
+    { scenario: "the flag is one millisecond newer", flagFirst: false, later: true },
+  ])("uses the same headline on the board and strip when $scenario", ({ flagFirst, later }) => {
+    const at = "2026-11-11T10:45:00.000Z";
+    const reply = ev("VULN-1", at, { summary: "MSRC replied", seen: true });
+    const flag = ev("VULN-1", later ? "2026-11-11T10:45:00.001Z" : at, { type: "field_changed", field: "isFlagged", newValue: true });
+    const events = flagFirst ? [flag, reply] : [reply, flag];
+    const view = buildView([caseRec("VULN-1", null)], [], events, STATE);
+    const selected = later ? flag : reply;
+    expect(view.rows[0]!.lastChange?.key).toBe(selected.key);
+    const [preview] = sinceStrip(view.events).entries;
+    expect(preview?.event.key).toBe(selected.key);
+    expect(preview?.unseen).toBe(true);
+    const fullActivity = groupFeed(view.events, new Date(at), null)[0]!.events;
+    expect(fullActivity.map((event) => event.key)).toEqual((later ? [flag, reply] : events).map((event) => event.key));
   });
 });
 

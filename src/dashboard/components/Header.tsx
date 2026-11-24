@@ -1,5 +1,7 @@
 import type { AppState } from "../../shared/protocol";
+import { formatUsd } from "../../core/awards";
 import { ago, sessionLine } from "../format";
+import { CaseIcon } from "./CaseIcon";
 import { Progress } from "./Progress";
 
 export type Page = "cases" | "activity" | "recognition" | "profile";
@@ -11,6 +13,7 @@ interface Props {
   /** The title: back to the cases board, search cleared. */
   onHome: () => void;
   unseen: number;
+  recognitionTotals?: { points: number; awarded: number };
   query: string;
   onQuery: (q: string) => void;
   searchRef: { current: HTMLInputElement | null };
@@ -93,6 +96,22 @@ export function Header(p: Props) {
           </label>
         )}
       </div>
+      {p.recognitionTotals && (
+        <a class="top__totals" href="#recognition" onClick={(e) => {
+          if (e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
+          e.preventDefault();
+          p.onPage("recognition");
+        }}>
+          <span class="top__points">
+            <CaseIcon name="points" />
+            <span><strong>{p.recognitionTotals.points.toLocaleString()}</strong> pts</span>
+          </span>{" "}
+          <span class="top__awarded">
+            <CaseIcon name="award" />
+            <span><strong>{formatUsd(p.recognitionTotals.awarded)}</strong> awarded</span>
+          </span>
+        </a>
+      )}
       <div class="top__actions">
         <div class={`top__sync${s.lastError && !s.syncing ? " top__sync--error" : ""}`}>
           {s.progress && s.baselineDone

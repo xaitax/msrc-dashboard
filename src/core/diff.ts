@@ -1,6 +1,6 @@
 // Change detection: old vs new snapshots of a case → typed, timestamped,
 // deduplicable events. Pure; the sync engine decides what to diff and when.
-import { bountyLabel, formatUsd } from "./awards";
+import { bountyChangeParts } from "./bountyChanges";
 import type { CaseRecord, ChangeEvent, EventType, ThreadMessage, VulnId } from "../shared/types";
 import type { CveRef } from "./cve";
 import { caseTitle, humanizeEnum, isAutomatic, MSRC_SENDER } from "./derive";
@@ -101,15 +101,6 @@ function short(v: unknown): string | null {
   return s.length <= 60 ? s : null;
 }
 
-function bountySummary(a: Record<string, unknown> | null, b: Record<string, unknown> | null): string {
-  const parts: string[] = [];
-  const money = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? formatUsd(v) : short(v));
-  if (!same(a?.["status"], b?.["status"])) parts.push(`Bounty ${bountyLabel(a?.["status"] as string | null) || "—"} → ${bountyLabel(b?.["status"] as string | null) || "—"}`);
-  if (!same(a?.["amount"], b?.["amount"])) parts.push(`Bounty amount ${money(a?.["amount"])} → ${money(b?.["amount"])}`);
-  if (!same(a?.["program"], b?.["program"])) parts.push(`Bounty program → ${short(b?.["program"])}`);
-  return parts.join(" · ") || "Bounty changed";
-}
-
 export function diffCase(
   prev: CaseRecord | undefined,
   next: CaseRecord,
@@ -160,9 +151,9 @@ export function diffCase(
     });
   }
   if (!same(a["bounty"], b["bounty"])) {
-    const ob = (a["bounty"] ?? null) as Record<string, unknown> | null;
-    const nb = (b["bounty"] ?? null) as Record<string, unknown> | null;
-    out.push({ ...base, type: "bounty", field: "bounty", oldValue: ob, newValue: nb, summary: bountySummary(ob, nb), occurredAt: changeLogTime(detail, "bounty", undefined), gen });
+    const ob = a["bounty"] ?? null;
+    const nb = b["bounty"] ?? null;
+    out.push({ ...base, type: "bounty", field: "bounty", oldValue: ob, newValue: nb, summary: bountyChangeParts(ob, nb).join(" → "), occurredAt: changeLogTime(detail, "bounty", undefined), gen });
   }
   const oldDisc = new Set(((a["disclosureEventList"] as Record<string, unknown>[] | null) ?? []).map((d) => stableStringify(d?.["id"] ?? d)));
   for (const d of (b["disclosureEventList"] as Record<string, unknown>[] | null) ?? []) {

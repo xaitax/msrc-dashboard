@@ -31,6 +31,7 @@ export type Msg =
   | { type: "db:changed" }
   | { type: "relogin:start" }
   | { type: "extras:get"; force?: boolean }
+  | { type: "release:check"; force?: boolean }
   /** Dashboard page → SW: an access token for the page's own write calls (extension pages only). */
   | { type: "auth:token"; fresh?: boolean }
   /** Dashboard → SW: the researcher ties a public CVE to a case (null = "not mine", undefined = forget). */

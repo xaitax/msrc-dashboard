@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.5.0 (2026-11-24)
+
+### Added
+
+- **Dark mode.** Follow your system theme or choose Light or Dark under **Profile → Appearance**. Your choice applies across dashboard tabs.
+- **GitHub update notices.** A daily check shows a dismissible banner when a newer stable release is available. Check manually from **Profile → About MSRC Dashboard**.
+- **Recognition totals.** The header shows your points and total bounty awards. Select either to open Recognition.
+
+### Improved
+
+- **Cases.** Color-coded stage headers and dated updates make the board easier to scan. Latest changes fits the available width and shows one update per case, newest first, even after you’ve seen it.
+- **Activity.** Each day shows an update count. Rows link to their cases and distinguish events with aligned timestamps and colored icons, including red flags and gold recognition points.
+
+### Fixed
+
+- **Points and bounty history.** First entries show the recorded points, bounty status, amount, or program. Later changes show both values. Desktop notifications use the same wording.
+- **Activity previews.** Grouped updates keep their unseen indicator until all incoming updates are seen. When a reply and a field change share a timestamp, the case preview shows the reply.
+
 ## 0.4.0 (2026-11-21)
 
 ### Added

@@ -62,6 +62,8 @@ Licensed under the [MIT License](LICENSE).
 - **Planned disclosures.** Add, change or cancel a planned talk or blog post on a submitted case,
   as on the portal's Disclosure tab. Each change is confirmed in a dialog first.
 - **MSRC announcements.** The portal's site-wide alert and banners appear at the top, dismissible.
+- **Appearance.** The dashboard follows your system theme by default. Choose Light or Dark under
+  **Profile → Appearance** to set a preference for this browser.
 - **Portal internals.** A page (linked from Profile) showing what the portal publishes about
   itself: its AI pre-screening setup, the environments compiled into its script, and its feature
   flags with MSRC's own descriptions.
@@ -125,8 +127,19 @@ Node.js 22.12 or later:
 
 Keep Developer mode on. With it off, Brave and Chrome may disable unpacked extensions on restart.
 
-To update, replace the folder, then click the reload icon on the extension's card. Your data stays.
-[CHANGELOG.md](CHANGELOG.md) lists what changed in each version.
+### Updates
+
+While you use the dashboard, it checks the latest stable GitHub release daily. When a newer
+version is available, a notice links to its release notes and download. Dismissing the notice
+hides it for that version. You can also choose **Check for updates** under **Profile → About
+MSRC Dashboard**.
+
+To install an update, download the `msrc-dashboard-<version>.zip` asset from
+[GitHub Releases](https://github.com/xaitax/msrc-dashboard/releases). Extract it and copy the
+contents of the folder containing `manifest.json` into the extension folder you already loaded.
+Then click **Reload** on the extension's card in `brave://extensions` or `chrome://extensions`.
+Using the same folder keeps your local cases, notes, and settings. See the
+[changelog](CHANGELOG.md) for the changes in each version.
 
 ## Security and privacy
 
@@ -138,10 +151,12 @@ Read this before installing.
   Use it only in a profile you trust.
 - **Signed-in portal tabs are seeded.** A new tab on `msrc.microsoft.com/report` gets that session
   copied in, so it doesn't bounce to the sign-in page.
-- **Everything else stays local.** Cases, messages, notes, tags and settings live in the browser's own storage.
-  There are no servers and no telemetry. The only host it contacts is Microsoft's: the portal, its
-  API and its sign-in service. Notes and tags are not encrypted separately; removing the extension
-  or clearing its storage deletes them.
+- **Local storage.** Cases, messages, notes, tags and settings live in the browser's own storage.
+  The dashboard contacts Microsoft's portal, API and sign-in service for case work. Notes and tags
+  are not encrypted separately. Removing the extension or clearing its storage deletes them.
+- **GitHub update checks.** The dashboard reads public release metadata from `api.github.com`.
+  It compares versions locally. The request contains no case data, installed version, or sign-in
+  credentials. There is no telemetry.
 - **The public CVE check sends nothing about you.** It reads the Security Update Guide without
   signing in, and matches your credit name on your machine.
 - **Nothing is sent to MSRC without a click.** Saving a draft, attaching a file, submitting,

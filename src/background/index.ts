@@ -23,6 +23,7 @@ import { caseFromNotificationId, notifySignedOut, openDashboard, showNotificatio
 import { createCycle } from "./cycle";
 import { getExtras } from "./extras";
 import { createRelogin } from "./relogin";
+import { checkRelease } from "./releaseCheck";
 import { createSync } from "./sync";
 import { MSRC_ORIGIN } from "../shared/urls";
 
@@ -157,6 +158,9 @@ chrome.runtime.onMessage.addListener((msg: Msg, sender, sendResponse) => {
       case "extras:get":
         if (!fromExtensionPage) return sendResponse(undefined);
         return sendResponse(await getExtras(msg.force === true));
+      case "release:check":
+        if (!fromExtensionPage) return sendResponse(undefined);
+        return sendResponse(await checkRelease(msg.force === true));
       case "auth:token": {
         // Only the dashboard page (an extension page) gets a token, for report writes.
         if (!fromExtensionPage) return sendResponse(undefined);

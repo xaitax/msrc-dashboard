@@ -2,6 +2,7 @@ import { useRef } from "preact/hooks";
 import type { TimelineItem } from "../../core/timeline";
 import { clock, dayLabel } from "../format";
 import { CaseIcon } from "./CaseIcon";
+import { ChangeParts } from "./ChangeText";
 import { Markdown } from "./Markdown";
 
 export interface FlagAction {
@@ -112,7 +113,7 @@ export function CaseTimeline({ items, flagged, flagStatus, flagAction, onUnflag 
                     <div class="tl__record">
                       <div class="tl__record-label">
                         {item.kind === "file" && <span class="tl__record-kind">Attachment uploaded</span>}
-                        <p>{item.text}</p>
+                        <p>{item.changeParts ? <ChangeParts parts={item.changeParts} /> : item.text}</p>
                       </div>
                       <div class="tl__record-meta">{newMark}{time}</div>
                     </div>

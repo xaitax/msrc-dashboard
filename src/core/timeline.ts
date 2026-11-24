@@ -3,6 +3,7 @@ import { humanizeEnum, isAutomatic, isUnseen, MSRC_SENDER } from "./derive";
 import type { StatusPoint } from "./history";
 import { summarizeMsrcMessage } from "./msrcText";
 import { htmlToText } from "./text";
+import { changeTextParts } from "./changeText";
 import type { CaseRecord, ChangeEvent, ThreadMessage } from "../shared/types";
 
 export interface TimelineItem {
@@ -11,6 +12,7 @@ export interface TimelineItem {
   from?: "msrc" | "you";
   label?: string; // e.g. the MSRC template milestone
   text: string;
+  changeParts?: string[];
   isNew: boolean;
   automatic?: boolean;
   key: string;
@@ -49,13 +51,15 @@ export function buildTimeline(c: CaseRecord, msgs: ThreadMessage[], events: Chan
   const unseenStatus = new Set(events.filter((e) => e.type === "status" && isUnseen(e)).map((e) => String(e.newValue)));
   history.forEach((h, i) => {
     const latestOfKind = history.findLastIndex((x) => x.status === h.status) === i;
-    items.push({ at: h.at, kind: "event", text: `Status → ${humanizeEnum(h.status)}`, isNew: latestOfKind && unseenStatus.has(h.status), key: `h:${h.status}:${h.at}` });
+    const changeParts = ["Status", humanizeEnum(h.status)];
+    items.push({ at: h.at, kind: "event", text: changeParts.join(" → "), changeParts, isNew: latestOfKind && unseenStatus.has(h.status), key: `h:${h.status}:${h.at}` });
   });
 
   for (const e of events) {
     if (MESSAGE_EVENTS.has(e.type)) continue; // represented by the message/file itself
     if (e.type === "status" && historyStatuses.has(String(e.newValue))) continue;
-    items.push({ at: e.occurredAt, kind: "event", text: e.summary, isNew: isUnseen(e), key: `e:${e.key}` });
+    const changeParts = changeTextParts(e);
+    items.push({ at: e.occurredAt, kind: "event", text: changeParts.join(" → "), changeParts, isNew: isUnseen(e), key: `e:${e.key}` });
   }
 
   return items.sort((a, b) => Date.parse(a.at) - Date.parse(b.at));

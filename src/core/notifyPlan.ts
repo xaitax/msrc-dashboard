@@ -1,6 +1,7 @@
 // Turns freshly detected events into desktop notifications:
 // one per case per poll; more than MAX_INDIVIDUAL cases → one summary.
 import type { ChangeEvent, EventType, VulnId } from "../shared/types";
+import { changeTextParts } from "./changeText";
 import { caseLabel, isUnseen } from "./derive";
 
 export interface NotificationPlan {
@@ -25,7 +26,7 @@ function caseLines(events: ChangeEvent[]): string[] {
     const allSame = replies.every((e) => e.summary === first);
     lines.push(replies.length === 1 ? first : allSame ? `${first} (${replies.length})` : `${first} (+${replies.length - 1} more)`);
   }
-  for (const e of sorted) if (e.type !== "msrc_message") lines.push(e.summary);
+  for (const e of sorted) if (e.type !== "msrc_message") lines.push(changeTextParts(e).join(" to "));
   return lines;
 }
 

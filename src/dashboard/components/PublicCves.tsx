@@ -6,6 +6,7 @@ import { publicCveUrl, type PublicCve } from "../../core/publicCves";
 import { send } from "../../shared/protocol";
 import type { VulnId } from "../../shared/types";
 import { caseLabel } from "../../core/derive";
+import { BoardDate } from "./BoardDate";
 
 type RowRef = { reportNumber: string; ticketNumber: string | null; title: string };
 
@@ -73,6 +74,7 @@ function PublicCveItem({ item, guess, rows, onOpen }: { item: PublicCve; guess: 
   // arrow keys fire `change` on a closed select.)
   const [pick, setPick] = useState("");
   const facts = cveFacts(item);
+  const released = releaseDay(item.releaseDate);
   return (
     <li class="pubcve">
       <div class="pubcve__head">
@@ -82,7 +84,7 @@ function PublicCveItem({ item, guess, rows, onOpen }: { item: PublicCve; guess: 
         <span class="pubcve__name">{item.title}</span>
       </div>
       <p class="pubcve__meta">
-        Published {releaseDay(item.releaseDate)}
+        Published{released && <> <BoardDate at={item.releaseDate} label={released} /></>}
         {facts ? `. ${facts}` : ""}
       </p>
       {guess && (

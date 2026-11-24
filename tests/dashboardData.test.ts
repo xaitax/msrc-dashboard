@@ -117,6 +117,16 @@ describe("feed collapsing", () => {
     ];
     expect(groupFeed(burst, NOW, 30)[0]!.events.map((e) => e.summary)).toEqual(["MSRC replied", "Bounty awarded: $5,000"]);
   });
+
+  it("marks a folded row unseen if any incoming update is unseen", () => {
+    const upload = (at: string, own: boolean, seen: boolean) =>
+      ev("VULN-1", "file_added", at, { summary: "File added: update.zip", own, seen });
+    const mine = upload("2026-11-11T12:00:00", true, false);
+    const incoming = upload("2026-11-11T10:00:00", false, false);
+
+    expect(groupFeed([mine, incoming], NOW, null)[0]!.events[0]).toMatchObject({ count: 2, unseen: true });
+    expect(groupFeed([mine, { ...incoming, seen: true }], NOW, null)[0]!.events[0]).toMatchObject({ count: 2, unseen: false });
+  });
 });
 
 describe("pinUnseen", () => {

@@ -8,11 +8,15 @@ const paths = {
   message: "M20 6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v14l4-4h10a2 2 0 0 0 2-2V6ZM8 9h8m-8 3h5",
   status: "M5 7h14m-4-4 4 4-4 4M19 17H5m4-4-4 4 4 4",
   file: "M8 13l6-6a2.2 2.2 0 1 1 3.1 3.1l-8 8a4 4 0 1 1-5.7-5.7l9-9",
+  award: "M8 4h8v6a4 4 0 0 1-8 0V4ZM8 6H4v2a4 4 0 0 0 4 4m8-6h4v2a4 4 0 0 1-4 4m-4 2v5m-4 1h8",
+  points: "M5 19v-5m7 5V5m7 14v-9",
+  calendar: "M4 6h16v14H4zM8 4v4m8-4v4M4 11h16",
   flag: "M5 21V4h12l-2.5 4 2.5 4H5",
   report: "M6 3h8l4 4v14H6zM14 3v5h4m-9 4h6m-6 4h6",
   code: "m8 6-5 6 5 6m8-12 5 6-5 6m-3-15-2 18",
   chevron: "m6 9 6 6 6-6",
   check: "m5 12 4 4L19 6",
+  bell: "M18 8a6 6 0 0 0-12 0c0 7-3 8-3 9h18c0-1-3-2-3-9ZM10 20a2.2 2.2 0 0 0 4 0",
   info: "M12 16v-4m0-4h.01M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z",
 } as const;
 

@@ -7,6 +7,8 @@ const common = { bundle: true, target: "chrome120", sourcemap: "linked", logLeve
 
 const builds = [
   { ...common, entryPoints: { background: "src/background/index.ts" }, format: "esm", outdir: "dist" },
+  // A classic script applies the saved scheme before the dashboard stylesheet can paint.
+  { ...common, entryPoints: { appearance: "src/dashboard/appearanceBoot.ts" }, format: "iife", outdir: "dist" },
   // Content scripts cannot be ES modules — classic IIFE.
   { ...common, entryPoints: { content: "src/content/index.ts" }, format: "iife", outdir: "dist" },
   {

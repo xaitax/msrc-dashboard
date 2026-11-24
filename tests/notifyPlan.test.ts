@@ -25,7 +25,7 @@ describe("planNotifications", () => {
     ]);
     expect(plans).toHaveLength(1);
     expect(plans[0]).toMatchObject({ title: "100140 · MSRC replied", reportNumber: "VULN-1" });
-    expect(plans[0]!.message).toBe("MSRC replied · Status Review / Repro → Develop");
+    expect(plans[0]!.message).toBe("MSRC replied · Status Review / Repro to Develop");
   });
 
   it("counts several MSRC replies on one case", () => {

@@ -1,5 +1,7 @@
 import { DISCLOSURE_DAYS, type CaseClock, type Deadline, type Quiet } from "../../core/caseClock";
 import { dayDate, shortWhen } from "../format";
+import type { ComponentChildren } from "preact";
+import { BoardDate } from "./BoardDate";
 
 // How long a case has been with MSRC: its day against the 90-day mark and how
 // long MSRC has been silent. Two scan-friendly metrics on the board card, a bar on the case page.
@@ -32,7 +34,7 @@ export function CardClock({ clock, published, now = new Date() }: { clock: CaseC
     else if (d.daysLeft > 0) ageLabel = `90-day mark in ${count(d.daysLeft, "day")}`;
     else ageLabel = "Past the 90-day mark";
   }
-  let activity = "No update yet";
+  let activity: ComponentChildren = "No update yet";
   let activityLabel = "MSRC activity";
   if (q?.kind === "since-submission") {
     activity = "No update";
@@ -43,7 +45,7 @@ export function CardClock({ clock, published, now = new Date() }: { clock: CaseC
   } else if (clock.onlyReceipt) {
     activity = "Receipt only";
   } else if (clock.lastMsrcAt) {
-    activity = shortWhen(clock.lastMsrcAt, now);
+    activity = <BoardDate at={clock.lastMsrcAt} label={shortWhen(clock.lastMsrcAt, now)} />;
     activityLabel = "Last MSRC activity";
   }
   return (

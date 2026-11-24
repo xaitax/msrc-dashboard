@@ -3,72 +3,12 @@ import { bountyLabel, formatUsd } from "../../core/awards";
 import { eventLabel, findPlacements, nameMatcher, programLabel } from "../../core/recognition";
 import type { Extras } from "../../background/extras";
 import { send } from "../../shared/protocol";
-import type { ChangeEvent } from "../../shared/types";
-import { groupFeed, type ViewModel } from "../data";
-import { caseLabel, clock, when } from "../format";
-import { TYPE_CLASS } from "./eventStyle";
-
-/* ---------------- Activity ---------------- */
-
-type ActFilter = "all" | "msrc" | "changes" | "yours";
-const ACT: [ActFilter, string, (e: ChangeEvent) => boolean][] = [
-  ["all", "Everything", () => true],
-  ["msrc", "From MSRC", (e) => e.type === "msrc_message"],
-  ["changes", "Status, CVE & bounty", (e) => ["status", "status_reason", "cve", "bounty", "disclosure_event", "field_changed"].includes(e.type)],
-  ["yours", "Your replies & uploads", (e) => e.own],
-];
-
-export function ActivityPage({ view, onOpen, onMarkSeen, onClearPortal, clearingPortalRead }: { view: ViewModel; onOpen: (rn: string) => void; onMarkSeen: () => void; onClearPortal: () => void; clearingPortalRead: boolean }) {
-  const [f, setF] = useState<ActFilter>("all");
-  const titleOf = useMemo(() => new Map(view.rows.map((r) => [r.reportNumber, r.title])), [view]);
-  const pred = ACT.find(([k]) => k === f)![2];
-  const groups = useMemo(() => groupFeed(view.events.filter(pred), new Date(), null), [view, f]);
-  const unseen = view.unseen;
-  return (
-    <main class="page">
-      <header class="page__head">
-        <h1 class="page__title">Activity</h1>
-        <p class="page__lead">{unseen ? `${unseen} unseen ${unseen === 1 ? "change" : "changes"}.` : "You're up to date."} Everything that happened on your cases, newest first.</p>
-        <div class="seg" role="group" aria-label="Filter activity">
-          {ACT.map(([k, label]) => (
-            <button key={k} class="seg__item" aria-pressed={f === k} onClick={() => setF(k)}>
-              {label}
-            </button>
-          ))}
-          <span class="top__grow" />
-          {unseen > 0 && <button type="button" class="btn" onClick={onMarkSeen}>Mark all seen</button>}
-          <button type="button" class="btn" onClick={onClearPortal} disabled={clearingPortalRead || view.state.auth !== "ok"}>
-            {clearingPortalRead ? "Marking read…" : "Clear MSRC bell"}
-          </button>
-        </div>
-      </header>
-      <div class="act">
-        {groups.length === 0 && <p class="empty">Nothing here yet.</p>}
-        {groups.map((g) => (
-          <section key={g.label} class="act__day">
-            <h2 class="act__label">{g.label}</h2>
-            <ul>
-              {g.events.map((e) => (
-                <li key={e.key}>
-                  <button class={`act__row${e.seen ? "" : " is-new"}`} onClick={() => onOpen(e.reportNumber)}>
-                    <time class="act__time">{clock(e.occurredAt)}</time>
-                    <span class={`dot dot--${TYPE_CLASS[e.type]}`} aria-hidden="true" />
-                    <span class="act__case">{caseLabel(e)}</span>
-                    <span class="act__what">
-                      {e.summary}
-                      {e.count > 1 && <span class="muted"> ×{e.count}</span>}
-                    </span>
-                    <span class="act__title">{titleOf.get(e.reportNumber) ?? ""}</span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </section>
-        ))}
-      </div>
-    </main>
-  );
-}
+import type { ViewModel } from "../data";
+import { caseLabel, when } from "../format";
+import type { Appearance } from "../appearance";
+import type { useAppearance } from "../useAppearance";
+import type { ReleaseUpdate } from "../useReleaseUpdate";
+import { ReleaseDetails } from "./ReleaseUpdate";
 
 /* ---------------- shared: extras loader ---------------- */
 
@@ -366,7 +306,7 @@ function PointsBlock({ view, rec }: { view: ViewModel; rec: Extras["recognition"
 
 /* ---------------- Profile ---------------- */
 
-export function ProfilePage() {
+export function ProfilePage({ appearance, update }: { appearance: ReturnType<typeof useAppearance>; update: ReleaseUpdate }) {
   const [x, busy, refresh] = useExtras();
   const [reveal, setReveal] = useState(false);
   const p = x?.profile;
@@ -374,9 +314,18 @@ export function ProfilePage() {
     <main class="page page--narrow">
       <header class="page__head">
         <h1 class="page__title">Profile</h1>
-        <p class="page__lead">Your MSRC researcher profile, as the portal has it. Read-only; change it on the portal.</p>
+        <p class="page__lead">Appearance is saved in this browser. You can update your researcher details in the MSRC portal.</p>
         <Fetched x={x} busy={busy} onRefresh={refresh} />
       </header>
+      <div class="profile-appearance">
+        <label for="dashboard-appearance">Appearance</label>
+        <select id="dashboard-appearance" class="input" value={appearance.preference}
+          onChange={(e) => appearance.choose(e.currentTarget.value as Appearance)}>
+          <option value="system">System (currently {appearance.systemDark ? "dark" : "light"})</option>
+          <option value="light">Light</option>
+          <option value="dark">Dark</option>
+        </select>
+      </div>
       {p && (
         <dl class="profile">
           <div>
@@ -440,11 +389,12 @@ export function ProfilePage() {
       <section class="profile-about" aria-labelledby="profile-about-title">
         <h2 id="profile-about-title">About MSRC Dashboard</h2>
         <p>
-          Version {chrome.runtime.getManifest().version} · Made by{" "}
+          Made by{" "}
           <a href="https://github.com/xaitax" target="_blank" rel="noopener noreferrer">Alex Hagenah (@xaitax)</a>
         </p>
         <p class="muted">An independent project, unaffiliated with Microsoft or MSRC.</p>
         <a href="https://github.com/xaitax/msrc-dashboard" target="_blank" rel="noopener noreferrer">MSRC Dashboard on GitHub</a>
+        <ReleaseDetails update={update} />
       </section>
     </main>
   );

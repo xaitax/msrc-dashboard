@@ -52,7 +52,7 @@ export interface CaseRow {
   annotation: CaseAnnotation;
 }
 
-export type FeedItem = ChangeEvent & { count: number };
+export type FeedItem = ChangeEvent & { count: number; unseen: boolean };
 
 export interface FeedGroup {
   label: string;
@@ -86,6 +86,12 @@ export interface ViewModel {
 
 /** Events newest first. */
 export const newestFirst = (a: { occurredAt: string }, b: { occurredAt: string }) => Date.parse(b.occurredAt) - Date.parse(a.occurredAt);
+/** A reply or milestone takes precedence over a field update stamped at the same instant. */
+export function casePreviewOrder(a: ChangeEvent, b: ChangeEvent): number {
+  const byTime = newestFirst(a, b);
+  if (byTime !== 0) return byTime;
+  return Number(a.type === "field_changed") - Number(b.type === "field_changed");
+}
 /** Cases by their latest change, newest first. */
 export const byRecency = (a: CaseRow, b: CaseRow) => Date.parse(b.lastChangeAt ?? "0") - Date.parse(a.lastChangeAt ?? "0");
 
@@ -103,7 +109,8 @@ export function groupFeed(events: ChangeEvent[], now: Date, days: number | null)
     if (twin) {
       twin.count += 1;
       twin.seen = twin.seen && e.seen;
-    } else group.events.push({ ...e, count: 1 });
+      twin.unseen ||= isUnseen(e);
+    } else group.events.push({ ...e, count: 1, unseen: isUnseen(e) });
   }
   return feed;
 }
@@ -146,7 +153,7 @@ export function buildView(
   // Older versions labelled this as a researcher action and stored raw API wording.
   events = events.map(normalizeFlagEvent);
   const eventsByCase = new Map<VulnId, ChangeEvent[]>();
-  for (const e of [...events].sort(newestFirst)) eventsByCase.set(e.reportNumber, [...(eventsByCase.get(e.reportNumber) ?? []), e]);
+  for (const e of [...events].sort(casePreviewOrder)) eventsByCase.set(e.reportNumber, [...(eventsByCase.get(e.reportNumber) ?? []), e]);
   const msgsByCase = new Map<VulnId, ThreadMessage[]>();
   for (const m of msgs) msgsByCase.set(m.reportNumber, [...(msgsByCase.get(m.reportNumber) ?? []), m]);
   const cves = extractCves(msgs);
